@@ -11,35 +11,50 @@ public class Hotel {
     // 基础属性
     private String name;
     private int money;
-    private int reputation;      // 声望 0-100
-    private int hotelLevel;      // 旅店等级 1-10
-    private int hotelExp;        // 旅店经验
-    private int expToNextLevel;  // 升级所需经验
+    private int reputation;
+    private int hotelLevel;
+    private int hotelExp;
+    private int expToNextLevel;
 
     // 员工和设施
     private List<Waiter> waiters;
     private List<Chef> chefs;
     private List<Table> tables;
     private List<Dish> menu;
+    
+    // 员工招聘池（可刷新）
+    private List<Waiter> waiterPool;
+    private List<Chef> chefPool;
+    private int lastPoolRefresh;
+
+    // 员工限制
+    private int maxWaiters = 5;
+    private int maxChefs = 3;
+    private int unlockedWaiterTier = 1;  // 解锁的员工等级
+    private int unlockedChefTier = 1;
 
     // 运营数据
-    private Queue<Customer> waitingCustomers;  // 等位的顾客
-    private Queue<Order> orderQueue;           // 订单队列
-    private List<Order> activeOrders;          // 正在处理的订单
-    private List<Customer> allCustomers;       // 所有在店顾客
-
-    // 员工系统
-    private int maxWaiters;        // 最大服务员数
-    private int maxChefs;          // 最大厨师数
-    private int unlockedWaiterTier; // 解锁的服务员等级 (1=普通, 2=高级, 3=金牌)
-    private int unlockedChefTier;   // 解锁的厨师等级 (1=学徒, 2=大厨, 3=主厨)
+    private Queue<Customer> waitingCustomers;
+    private Queue<Order> orderQueue;
+    private List<Order> activeOrders;
+    private List<Customer> allCustomers;
 
     // 统计数据
     private int totalCustomersServed;
     private int totalCustomersLost;
     private int totalRevenue;
     private int totalTips;
-    private int gameTime;  // 游戏时间（tick数）
+    private int gameTime;
+    
+    // 评分系统
+    private double shopRating;      // 店铺评分 1.0-5.5
+    private int totalRatings;       // 总评价数
+    private int goodRatings;        // 好评数(4星以上)
+    private List<String> recentReviews;  // 最近评价
+
+    // 桌子解锁
+    private int maxTables;
+    private boolean hasSecondFloor;
 
     // 随机事件
     private Random random;
@@ -48,68 +63,120 @@ public class Hotel {
 
     // 游戏日志
     private List<String> gameLogs;
-    private static final int MAX_LOGS = 20;
+    private static final int MAX_LOGS = 30;
 
+    /**
+     * 标准构造函数（新游戏）
+     */
     public Hotel(String name) {
-        this.name = name;
-        this.money = 1000;
-        this.reputation = 30;
-        this.hotelLevel = 1;
-        this.hotelExp = 0;
-        this.expToNextLevel = 100;
+        this(name, true);
+    }
 
+    /**
+     * 构造函数
+     * @param name 餐厅名称
+     * @param initDefault 是否初始化默认数据（加载存档时为false）
+     */
+    public Hotel(String name, boolean initDefault) {
+        this.name = name;
         this.waiters = new ArrayList<>();
         this.chefs = new ArrayList<>();
         this.tables = new ArrayList<>();
         this.menu = new ArrayList<>();
-
+        this.waiterPool = new ArrayList<>();
+        this.chefPool = new ArrayList<>();
+        
         this.waitingCustomers = new LinkedList<>();
         this.orderQueue = new LinkedList<>();
         this.activeOrders = new ArrayList<>();
         this.allCustomers = new ArrayList<>();
+        
+        this.recentReviews = new ArrayList<>();
+        this.gameLogs = new ArrayList<>();
+        this.random = new Random();
+        
+        if (initDefault) {
+            initializeDefault();
+        }
+    }
 
-        // 初始员工限制
-        this.maxWaiters = 2;
-        this.maxChefs = 2;
-        this.unlockedWaiterTier = 1;  // 只能招普通服务员
-        this.unlockedChefTier = 1;    // 只能招学徒厨师
-
+    /**
+     * 初始化默认配置（新游戏）
+     */
+    private void initializeDefault() {
+        this.money = 3000;  // 初始资金减少，需要自己招聘
+        this.reputation = 20;
+        this.hotelLevel = 1;
+        this.hotelExp = 0;
+        this.expToNextLevel = 5;  // 1级升2级只需5经验
+        
+        this.maxWaiters = 5;
+        this.maxChefs = 3;
+        this.unlockedWaiterTier = 1;
+        this.unlockedChefTier = 1;
+        
         this.totalCustomersServed = 0;
         this.totalCustomersLost = 0;
         this.totalRevenue = 0;
         this.totalTips = 0;
         this.gameTime = 0;
+        
+        this.shopRating = 3.0;
+        this.totalRatings = 0;
+        this.goodRatings = 0;
+        
+        this.maxTables = 5;
+        this.hasSecondFloor = false;
+        
+        this.lastPoolRefresh = 0;
 
-        this.random = new Random();
-        this.currentEvent = null;
-        this.eventTimer = 0;
-
-        this.gameLogs = new ArrayList<>();
-
-        // 初始化默认配置
-        initializeDefault();
-    }
-
-    /**
-     * 初始化默认配置
-     */
-    private void initializeDefault() {
-        // 初始员工
-        waiters.add(new Waiter("小明"));
-        chefs.add(new Chef("老王"));
-
-        // 初始桌子
+        // 初始桌子（2张）
         tables.add(new Table(1, 2));
-        tables.add(new Table(2, 2));
-        tables.add(new Table(3, 4));
+        tables.add(new Table(2, 4));
 
         // 初始菜单（1级菜品）
         menu.add(Dish.createEggFriedRice());
         menu.add(Dish.createTomatoEgg());
-        menu.add(Dish.createMaPoTofu());
-        menu.add(Dish.createKungPaoChicken());
+        
+        // 刷新招聘池
+        refreshEmployeePool();
 
-        addLog("🏨 " + name + " 开业了！初始资金: $" + money);
+        addLog("[开业] " + name + " 开业了！");
+        addLog("[资金] 初始资金: $" + money);
+        addLog("[提示] 先招聘员工才能开始营业！");
+    }
+
+    /**
+     * 刷新员工招聘池
+     */
+    public void refreshEmployeePool() {
+        waiterPool.clear();
+        chefPool.clear();
+        
+        // 根据店铺等级生成不同等级的员工
+        int maxTier = Math.min(5, 1 + hotelLevel / 15);
+        if (hotelLevel >= 70 && goodRatings >= 1000) {
+            maxTier = 5;  // 特技员工需要70级+1000好评
+        } else if (hotelLevel >= 50) {
+            maxTier = Math.min(maxTier, 4);
+        } else if (hotelLevel >= 30) {
+            maxTier = Math.min(maxTier, 3);
+        } else if (hotelLevel >= 10) {
+            maxTier = Math.min(maxTier, 2);
+        } else {
+            maxTier = 1;
+        }
+        
+        // 生成3-5个候选员工
+        int poolSize = 3 + random.nextInt(3);
+        for (int i = 0; i < poolSize; i++) {
+            int tier = 1 + random.nextInt(maxTier);
+            waiterPool.add(Waiter.generateRandom(tier, hotelLevel));
+            chefPool.add(Chef.generateRandom(tier, hotelLevel));
+        }
+        
+        lastPoolRefresh = gameTime;
+        addLog("[招聘] 候选员工已刷新！");
     }
 
     /**
@@ -118,28 +185,26 @@ public class Hotel {
     public void tick() {
         gameTime++;
 
-        // 1. 处理随机事件
+        // 自动刷新招聘池（每5分钟）
+        if (gameTime - lastPoolRefresh >= 300) {
+            refreshEmployeePool();
+        }
+
+        // 没有员工时不生成顾客
+        if (waiters.isEmpty() || chefs.isEmpty()) {
+            if (gameTime % 30 == 0) {
+                addLog("[警告] 缺少员工！请先招聘服务员和厨师");
+            }
+            return;
+        }
+
         updateEvent();
-
-        // 2. 尝试生成新顾客
         trySpawnCustomer();
-
-        // 3. 更新所有顾客状态
         updateCustomers();
-
-        // 4. 更新所有员工状态
         updateEmployees();
-
-        // 5. 服务员自动工作
         processWaiters();
-
-        // 6. 厨师自动工作
         processChefs();
-
-        // 7. 检查升级
         checkLevelUp();
-
-        // 8. 清理已离开的顾客
         cleanupCustomers();
     }
 
@@ -147,21 +212,39 @@ public class Hotel {
      * 尝试生成新顾客
      */
     private void trySpawnCustomer() {
-        // 基础概率：10% + 声望加成
-        double spawnChance = 0.1 + (reputation * 0.003) + (hotelLevel * 0.02);
+        // 检查是否有空桌子
+        boolean hasEmptyTable = findEmptyTable() != null;
+        int waitingCount = waitingCustomers.size();
         
-        // 特殊事件影响
+        // 规则：桌子满了，等待区最多5人
+        if (!hasEmptyTable && waitingCount >= 5) {
+            return;  // 不再生成新顾客
+        }
+        
+        // 有空桌子时正常概率，没空桌子时降低概率
+        double spawnChance;
+        if (hasEmptyTable) {
+            // 有空位，正常来客
+            spawnChance = 0.08 + (hotelLevel * 0.005) + (reputation * 0.001);
+        } else {
+            // 没空位但等待区没满，少量来客
+            spawnChance = 0.03;
+        }
+        
+        // 事件影响
         if ("雨天".equals(currentEvent)) {
-            spawnChance *= 2;
+            spawnChance *= 1.3;
         } else if ("隔壁开新店".equals(currentEvent)) {
-            spawnChance *= 0.8;
+            spawnChance *= 0.7;
         }
 
         if (random.nextDouble() < spawnChance) {
-            Customer customer = new Customer();
+            Customer customer = Customer.generate(hotelLevel, goodRatings);
             waitingCustomers.add(customer);
             allCustomers.add(customer);
-            addLog("👋 新顾客 " + customer.getName() + " 来了！[携带$" + customer.getMoney() + "]");
+            
+            String typeInfo = customer.isSpecial() ? " [" + customer.getType().name + "]" : "";
+            addLog("[来客] " + customer.getName() + typeInfo + " 来了！");
         }
     }
 
@@ -173,13 +256,11 @@ public class Hotel {
             Customer.CustomerState prevState = customer.getState();
             customer.tick();
             
-            // 检查是否生气离开
             if (prevState != Customer.CustomerState.LEFT_ANGRY && 
                 customer.getState() == Customer.CustomerState.LEFT_ANGRY) {
                 handleAngryCustomer(customer);
             }
             
-            // 检查是否吃完
             if (prevState == Customer.CustomerState.EATING && 
                 customer.getState() == Customer.CustomerState.FINISHED) {
                 handleFinishedCustomer(customer);
@@ -187,38 +268,40 @@ public class Hotel {
         }
     }
 
-    /**
-     * 处理生气离开的顾客
-     */
     private void handleAngryCustomer(Customer customer) {
-        int penalty = 10 + random.nextInt(20);
+        int penalty = 5 + random.nextInt(15);
         money = Math.max(0, money - penalty);
         reputation = Math.max(0, reputation + customer.getReputationEffect());
         totalCustomersLost++;
+        
+        // 差评
+        double rating = customer.getRating();
+        addRating(rating, customer.getReview());
         
         if (customer.getTable() != null) {
             customer.getTable().clearTable();
         }
         
-        addLog("😡 " + customer.getName() + " 等太久生气离开了！声望-" + 
-               Math.abs(customer.getReputationEffect()) + " 金钱-$" + penalty);
+        addLog("[差评] " + customer.getName() + " 生气离开！评分:" + rating + "星");
     }
 
-    /**
-     * 处理吃完的顾客
-     */
     private void handleFinishedCustomer(Customer customer) {
         int bill = customer.calculateBill();
         int tip = customer.calculateTip();
+        int expGain = customer.getExpReward();
+        int totalIncome = bill + tip;
         
-        money += bill + tip;
+        money += totalIncome;
         totalRevenue += bill;
         totalTips += tip;
+        hotelExp += expGain;
         reputation = Math.min(100, reputation + customer.getReputationEffect());
-        hotelExp += bill / 10;
         totalCustomersServed++;
         
-        // 小费分给服务员
+        // 评分
+        double rating = customer.getRating();
+        addRating(rating, customer.getReview());
+        
         if (!waiters.isEmpty()) {
             Waiter w = waiters.get(random.nextInt(waiters.size()));
             w.receiveTip(tip);
@@ -229,56 +312,62 @@ public class Hotel {
         }
         customer.setState(Customer.CustomerState.LEFT_HAPPY);
         
-        addLog("💰 " + customer.getName() + " 满意离开！账单$" + bill + " 小费$" + tip + 
-               " 声望+" + customer.getReputationEffect());
+        String tipInfo = tip > 0 ? "(+小费" + tip + ")" : "";
+        addLog("[收入] " + customer.getName() + " 结账 $" + bill + tipInfo + " 评分:" + rating + "星 经验+" + expGain);
     }
 
     /**
-     * 更新所有员工状态（休息恢复等）
+     * 添加评分
      */
+    private void addRating(double rating, String review) {
+        totalRatings++;
+        if (rating >= 4.0) {
+            goodRatings++;
+        }
+        
+        // 更新平均评分
+        shopRating = ((shopRating * (totalRatings - 1)) + rating) / totalRatings;
+        shopRating = Math.round(shopRating * 10) / 10.0;
+        
+        // 保存评价（最多30条）
+        recentReviews.add(0, String.format("%.1f★ %s", rating, review));
+        while (recentReviews.size() > 30) {
+            recentReviews.remove(recentReviews.size() - 1);
+        }
+    }
+    
+    public double getAverageRating() {
+        return shopRating;
+    }
+
     private void updateEmployees() {
-        for (Waiter w : waiters) {
-            w.rest();
-        }
-        for (Chef c : chefs) {
-            c.rest();
-        }
+        for (Waiter w : waiters) { w.rest(); }
+        for (Chef c : chefs) { c.rest(); }
     }
 
-    /**
-     * 处理服务员工作
-     */
     private void processWaiters() {
         for (Waiter waiter : waiters) {
-            // 正在休息的服务员跳过
             if (waiter.isResting()) continue;
 
             switch (waiter.getCurrentTask()) {
                 case NONE:
-                    // 空闲时寻找工作（只有 canWork 时才分配新任务）
                     if (waiter.canWork()) {
                         assignWaiterTask(waiter);
                     }
                     break;
-                    
                 case GREETING:
-                    // 迎客中
                     waiter.setTaskTimer(waiter.getTaskTimer() - 1);
                     if (waiter.getTaskTimer() <= 0) {
                         finishGreeting(waiter);
                     }
                     break;
-                    
                 case TAKING_ORDER:
-                    // 点单中
                     waiter.setTaskTimer(waiter.getTaskTimer() - 1);
                     if (waiter.getTaskTimer() <= 0) {
                         finishTakingOrder(waiter);
                     }
                     break;
-                    
                 case DELIVERING:
-                    // 上菜中
                     waiter.setTaskTimer(waiter.getTaskTimer() - 1);
                     if (waiter.getTaskTimer() <= 0) {
                         finishDelivering(waiter);
@@ -288,60 +377,53 @@ public class Hotel {
         }
     }
 
-    /**
-     * 分配服务员任务
-     */
     private void assignWaiterTask(Waiter waiter) {
-        // 优先级1：上菜
+        // 优先上菜
         for (Order order : activeOrders) {
             if (order.hasCompletedDishes()) {
                 Dish dish = order.getCompletedDishForDelivery();
                 waiter.setServingCustomer(order.getCustomer());
-                waiter.startDelivering(order);
-                addLog("🍽️ " + waiter.getName() + " 去上菜: " + dish.getName());
+                waiter.startDelivering(order, dish);
+                addLog("[上菜] " + waiter.getName() + " 上菜: " + dish.getName());
                 return;
             }
         }
 
-        // 优先级2：迎客
+        // 迎客
         if (!waitingCustomers.isEmpty()) {
             Table emptyTable = findEmptyTable();
             if (emptyTable != null) {
                 Customer customer = waitingCustomers.poll();
                 waiter.startGreeting(customer);
-                addLog("👔 " + waiter.getName() + " 去迎接 " + customer.getName());
+                addLog("[迎客] " + waiter.getName() + " 迎接 " + customer.getName());
                 return;
             }
         }
 
-        // 优先级3：点单
+        // 点单
         for (Customer customer : allCustomers) {
             if (customer.getState() == Customer.CustomerState.WAITING_ORDER) {
                 waiter.setServingCustomer(customer);
                 waiter.startTakingOrder();
-                addLog("📝 " + waiter.getName() + " 去给 " + customer.getName() + " 点单");
+                addLog("[点单] " + waiter.getName() + " 给 " + customer.getName() + " 点单");
                 return;
             }
         }
     }
 
-    /**
-     * 完成迎客
-     */
     private void finishGreeting(Waiter waiter) {
         Customer customer = waiter.getServingCustomer();
         Table table = findEmptyTable();
         
         if (table != null && customer != null) {
-            // 检查是否出错（滑倒等）
             if (waiter.checkError() && "雨天".equals(currentEvent)) {
-                addLog("💦 " + waiter.getName() + " 滑倒了！");
+                addLog("[事故] " + waiter.getName() + " 滑倒了！");
                 waiter.consumeStamina(10);
             }
             
             table.seatCustomer(customer);
-            waiter.gainExp(5);
-            addLog("✅ " + customer.getName() + " 入座桌" + table.getId());
+            waiter.gainExp(3);
+            addLog("[入座] " + customer.getName() + " 入座桌" + table.getId());
         }
         
         waiter.setServingCustomer(null);
@@ -349,9 +431,6 @@ public class Hotel {
         waiter.setBusy(false);
     }
 
-    /**
-     * 完成点单
-     */
     private void finishTakingOrder(Waiter waiter) {
         Customer customer = waiter.getServingCustomer();
         
@@ -360,13 +439,13 @@ public class Hotel {
             Order order = new Order(customer, gameTime);
             orderQueue.add(order);
             activeOrders.add(order);
-            waiter.gainExp(10);
+            waiter.gainExp(5);
             
             StringBuilder orderStr = new StringBuilder();
             for (Dish d : customer.getOrders()) {
                 orderStr.append(d.getName()).append(" ");
             }
-            addLog("📋 " + customer.getName() + " 点了: " + orderStr.toString());
+            addLog("[订单] " + customer.getName() + " 点了: " + orderStr);
         }
         
         waiter.setServingCustomer(null);
@@ -374,38 +453,22 @@ public class Hotel {
         waiter.setBusy(false);
     }
 
-    /**
-     * 完成上菜
-     */
     private void finishDelivering(Waiter waiter) {
         Order order = waiter.getCarryingOrder();
+        Dish deliveredDish = waiter.getCarryingDish();
         
         if (order != null && order.getCustomer() != null) {
-            // 检查是否出错（摔盘子）
-            if (waiter.checkError()) {
-                addLog("💔 " + waiter.getName() + " 摔碎了盘子！");
-                money = Math.max(0, money - 20);
-            } else {
-                // 找到对应的菜品
-                Dish deliveredDish = null;
-                for (Dish d : order.getDishes()) {
-                    if (!order.getCompletedDishes().contains(d) && 
-                        !order.getPendingDishes().contains(d)) {
-                        deliveredDish = d;
-                        break;
-                    }
-                }
-                
+            // 前期（10级以下）不会摔盘子
+            if (hotelLevel >= 10 && waiter.checkError()) {
+                addLog("[事故] " + waiter.getName() + " 摔碎盘子！");
+                money = Math.max(0, money - 15);
+            } else if (deliveredDish != null) {
                 Customer customer = order.getCustomer();
-                if (deliveredDish != null) {
-                    customer.receiveDish(deliveredDish);
-                    addLog("🍽️ 给 " + customer.getName() + " 上了 " + deliveredDish.getName());
-                }
-                
-                waiter.gainExp(15);
+                customer.receiveDish(deliveredDish);
+                waiter.gainExp(8);
+                addLog("[送达] " + customer.getName() + " 收到 " + deliveredDish.getName());
             }
             
-            // 检查订单是否完全送达
             if (order.isFullyDelivered()) {
                 order.markDelivered();
                 activeOrders.remove(order);
@@ -415,69 +478,51 @@ public class Hotel {
         waiter.finishTask();
     }
 
-    /**
-     * 处理厨师工作
-     */
     private void processChefs() {
         for (Chef chef : chefs) {
-            // 正在休息的厨师跳过
             if (chef.isResting()) continue;
 
             if (chef.isBusy()) {
-                // 正在做菜
                 chef.setCookTimer(chef.getCookTimer() - 1);
                 if (chef.getCookTimer() <= 0) {
                     finishCooking(chef);
                 }
             } else if (chef.canWork()) {
-                // 空闲时从订单队列取菜做
                 assignChefTask(chef);
             }
         }
     }
 
-    /**
-     * 分配厨师任务
-     */
     private void assignChefTask(Chef chef) {
         for (Order order : activeOrders) {
             Dish dish = order.getNextDishToCook();
             if (dish != null && chef.canCook(dish)) {
                 Dish toCook = order.startCookingDish();
                 chef.startCooking(order, toCook);
-                addLog("🔥 " + chef.getName() + " 开始做 " + toCook.getName() + 
-                       " [需要" + chef.getCookTime(toCook) + "s]");
+                addLog("[烹饪] " + chef.getName() + " 开始做 " + toCook.getName());
                 return;
             }
         }
     }
 
-    /**
-     * 完成烹饪
-     */
     private void finishCooking(Chef chef) {
         Order order = chef.getCurrentOrder();
         Dish dish = chef.getCurrentDish();
         
         if (order != null && dish != null) {
-            // 检查是否把菜做焦了
             if (chef.checkBurnDish()) {
-                addLog("🔥 " + chef.getName() + " 把 " + dish.getName() + " 做焦了！重做...");
-                // 重新加入队列
+                addLog("[事故] " + chef.getName() + " 把 " + dish.getName() + " 做焦了！");
                 order.getPendingDishes().add(0, dish);
                 chef.consumeStamina(5);
             } else {
                 order.completeDish(dish);
-                addLog("✅ " + chef.getName() + " 完成了 " + dish.getName());
+                addLog("[完成] " + chef.getName() + " 完成 " + dish.getName());
             }
         }
         
         chef.finishCooking();
     }
 
-    /**
-     * 找空桌子
-     */
     private Table findEmptyTable() {
         for (Table t : tables) {
             if (t.isAvailable()) {
@@ -488,141 +533,180 @@ public class Hotel {
     }
 
     /**
-     * 检查升级
+     * 检查升级（优化后的经验需求）
      */
     private void checkLevelUp() {
-        while (hotelExp >= expToNextLevel && hotelLevel < 10) {
+        while (hotelExp >= expToNextLevel && hotelLevel < 100) {
             hotelExp -= expToNextLevel;
             hotelLevel++;
-            expToNextLevel = (int)(expToNextLevel * 1.5);
+            // 经验需求：1->5, 10, 30, 50, 80, 120, 170...
+            expToNextLevel = getExpForLevel(hotelLevel + 1);
             onHotelLevelUp();
         }
     }
 
     /**
-     * 旅店升级
+     * 获取升到某等级需要的经验
      */
+    private int getExpForLevel(int level) {
+        if (level <= 2) return 5;
+        if (level <= 5) return 10 + (level - 2) * 10;
+        if (level <= 10) return 50 + (level - 5) * 15;
+        if (level <= 20) return 125 + (level - 10) * 20;
+        if (level <= 50) return 325 + (level - 20) * 30;
+        return 1225 + (level - 50) * 50;
+    }
+
     private void onHotelLevelUp() {
-        addLog("🎊 旅店升级到 Lv." + hotelLevel + "！");
+        addLog("[升级] 餐厅升级到 Lv." + hotelLevel + "！");
         
-        // 解锁新内容
+        // 解锁内容
         switch (hotelLevel) {
             case 2:
-                menu.add(Dish.createSweetSourPork());
-                menu.add(Dish.createBraisedPork());
-                maxWaiters = 3;
-                maxChefs = 3;
-                addLog("🍳 解锁新菜品：糖醋里脊、红烧肉");
-                addLog("👥 员工槽位扩展！服务员/厨师上限: 3人");
+                menu.add(Dish.createMaPoTofu());
+                addLog("[解锁] 新菜品：麻婆豆腐");
                 break;
             case 3:
-                menu.add(Dish.createSteamedFish());
-                menu.add(Dish.createPekingDuck());
-                tables.add(new Table(tables.size() + 1, 4));
-                unlockedWaiterTier = 2;  // 解锁高级服务员
-                unlockedChefTier = 2;    // 解锁大厨
-                addLog("🍳 解锁新菜品：清蒸鱼、北京烤鸭 | 新增1桌");
-                addLog("⭐ 解锁高级员工：高级服务员、大厨！");
-                break;
-            case 4:
-                menu.add(Dish.createLobster());
-                tables.add(new Table(tables.size() + 1, 6));
-                maxWaiters = 4;
-                maxChefs = 4;
-                addLog("🍳 解锁新菜品：龙虾 | 新增1大桌");
-                addLog("👥 员工槽位扩展！服务员/厨师上限: 4人");
+                menu.add(Dish.createKungPaoChicken());
+                maxTables = 8;
+                addLog("[解锁] 新菜品：宫保鸡丁 | 桌子上限+3");
                 break;
             case 5:
-                menu.add(Dish.createWagyuSteak());
-                unlockedWaiterTier = 3;  // 解锁金牌服务员
-                unlockedChefTier = 3;    // 解锁主厨
-                addLog("🍳 解锁终极菜品：和牛牛排！");
-                addLog("🏆 解锁顶级员工：金牌服务员、主厨！");
+                menu.add(Dish.createSweetSourPork());
+                addLog("[解锁] 新菜品：糖醋里脊");
                 break;
-            case 6:
-                maxWaiters = 5;
-                maxChefs = 5;
-                tables.add(new Table(tables.size() + 1, 8));
-                addLog("👥 员工槽位扩展！服务员/厨师上限: 5人");
-                addLog("🪑 新增VIP大桌（8人）！");
+            case 10:
+                unlockedWaiterTier = 2;
+                unlockedChefTier = 2;
+                menu.add(Dish.createBraisedPork());
+                maxTables = 12;
+                addLog("[解锁] 普通员工！新菜品：红烧肉");
+                break;
+            case 15:
+                menu.add(Dish.createSteamedFish());
+                addLog("[解锁] 新菜品：清蒸鱼");
+                break;
+            case 20:
+                menu.add(Dish.createPekingDuck());
+                maxTables = 18;
+                hasSecondFloor = true;
+                addLog("[解锁] 二楼！新菜品：北京烤鸭");
+                break;
+            case 30:
+                unlockedWaiterTier = 3;
+                unlockedChefTier = 3;
+                menu.add(Dish.createLobster());
+                maxTables = 24;
+                addLog("[解锁] 中级员工！新菜品：龙虾");
+                break;
+            case 50:
+                unlockedWaiterTier = 4;
+                unlockedChefTier = 4;
+                menu.add(Dish.createWagyuSteak());
+                maxTables = 30;
+                addLog("[解锁] 高级员工！终极菜品：和牛牛排！");
+                break;
+            case 70:
+                if (goodRatings >= 1000) {
+                    unlockedWaiterTier = 5;
+                    unlockedChefTier = 5;
+                    addLog("[解锁] 特技员工！");
+                }
                 break;
         }
         
-        // 增加最大座位等
-        reputation = Math.min(100, reputation + 5);
+        reputation = Math.min(100, reputation + 3);
+        refreshEmployeePool();
     }
 
-    /**
-     * 清理已离开的顾客
-     */
     private void cleanupCustomers() {
         allCustomers.removeIf(c -> 
             c.getState() == Customer.CustomerState.LEFT_ANGRY || 
             c.getState() == Customer.CustomerState.LEFT_HAPPY);
     }
 
-    /**
-     * 更新随机事件
-     */
     private void updateEvent() {
         if (eventTimer > 0) {
             eventTimer--;
             if (eventTimer == 0) {
-                addLog("📢 事件结束：" + currentEvent);
+                addLog("[事件] 事件结束：" + currentEvent);
                 currentEvent = null;
             }
             return;
         }
 
-        // 2%概率触发新事件
-        if (random.nextDouble() < 0.02) {
+        // 事件触发概率很低，前期更低
+        double eventChance = 0.005;  // 0.5%基础概率
+        if (hotelLevel >= 10) {
+            eventChance = 0.008;
+        } else if (hotelLevel >= 20) {
+            eventChance = 0.01;
+        }
+        
+        if (random.nextDouble() < eventChance) {
             triggerRandomEvent();
         }
     }
 
-    /**
-     * 触发随机事件
-     */
     private void triggerRandomEvent() {
-        int eventType = random.nextInt(4);
+        // 根据等级决定可触发的事件
+        double rand = random.nextDouble();
         
-        switch (eventType) {
-            case 0:
-                currentEvent = "雨天";
-                eventTimer = 30;
-                addLog("🌧️ 【事件】下雨了！顾客翻倍但服务员容易滑倒");
-                break;
-            case 1:
-                currentEvent = "隔壁开新店";
-                eventTimer = 40;
-                addLog("🏪 【事件】隔壁开了新店！顾客减少20%");
-                break;
-            case 2:
+        // 前10级只有好事件
+        if (hotelLevel < 10) {
+            if (rand < 0.7) {
+                // 70%概率是美食评论家（好事）
                 currentEvent = "美食评论家";
-                eventTimer = 1; // 只持续1秒
-                // 这里可以加特殊逻辑
-                addLog("👨‍💼 【事件】美食评论家来了！表现好声望大涨！");
-                reputation = Math.min(100, reputation + 10);
-                break;
-            case 3:
+                eventTimer = 1;
+                reputation = Math.min(100, reputation + 5);
+                addLog("[好事] 美食评论家来了！声望+5");
+            } else {
+                // 30%概率是雨天（中性）
+                currentEvent = "雨天";
+                eventTimer = 20;
+                addLog("[事件] 下雨了！顾客稍微多一点");
+            }
+            return;
+        }
+        
+        // 10级以上才有负面事件
+        if (rand < 0.4) {
+            currentEvent = "美食评论家";
+            eventTimer = 1;
+            reputation = Math.min(100, reputation + 8);
+            addLog("[好事] 美食评论家来了！声望+8");
+        } else if (rand < 0.7) {
+            currentEvent = "雨天";
+            eventTimer = 25;
+            addLog("[事件] 下雨了！");
+        } else if (rand < 0.9) {
+            currentEvent = "隔壁开新店";
+            eventTimer = 30;
+            addLog("[事件] 隔壁开新店！顾客稍减少");
+        } else {
+            // 只有10%概率是员工吵架，且只有20级以上才会发生
+            if (hotelLevel >= 20 && waiters.size() >= 2 && chefs.size() >= 2) {
                 currentEvent = "员工吵架";
-                eventTimer = 15;
-                // 随机让两个员工休息
-                if (!waiters.isEmpty()) {
+                eventTimer = 10;
+                // 只让一个员工休息，不是全部
+                if (random.nextBoolean() && !waiters.isEmpty()) {
                     waiters.get(random.nextInt(waiters.size())).startResting();
-                }
-                if (!chefs.isEmpty()) {
+                    addLog("[小事故] 员工闹别扭休息一下");
+                } else if (!chefs.isEmpty()) {
                     chefs.get(random.nextInt(chefs.size())).startResting();
+                    addLog("[小事故] 厨师闹别扭休息一下");
                 }
-                addLog("😤 【事件】员工吵架了！部分员工暂时无法工作");
-                break;
+            } else {
+                // 不满足条件则变成好事
+                currentEvent = "美食评论家";
+                eventTimer = 1;
+                reputation = Math.min(100, reputation + 5);
+                addLog("[好事] 美食评论家来了！");
+            }
         }
     }
 
-    /**
-     * 添加日志
-     */
-    private void addLog(String log) {
+    public void addLog(String log) {
         String timeStr = String.format("[%02d:%02d]", gameTime / 60, gameTime % 60);
         gameLogs.add(timeStr + " " + log);
         if (gameLogs.size() > MAX_LOGS) {
@@ -630,279 +714,203 @@ public class Hotel {
         }
     }
 
-    /**
-     * 招聘服务员（普通）
-     */
-    public boolean hireWaiter(String name, int cost) {
-        return hireWaiter(name, cost, 1);
-    }
+    // ========== 招聘和解雇 ==========
 
     /**
-     * 招聘服务员（指定等级）
-     * @param tier 1=普通($200), 2=高级($500), 3=金牌($1000)
+     * 从招聘池招聘服务员
      */
-    public boolean hireWaiter(String name, int cost, int tier) {
+    public boolean hireWaiterFromPool(int index) {
+        if (index < 0 || index >= waiterPool.size()) return false;
         if (waiters.size() >= maxWaiters) {
-            addLog("❌ 服务员已满员（" + maxWaiters + "人）！升级餐厅可扩展");
+            addLog("[错误] 服务员已满员！");
             return false;
         }
-        if (tier > unlockedWaiterTier) {
-            addLog("❌ 尚未解锁该等级服务员！需要餐厅等级更高");
+        
+        Waiter w = waiterPool.get(index);
+        int cost = w.getHirePrice();
+        
+        if (money < cost) {
+            addLog("[错误] 资金不足！需要$" + cost);
             return false;
         }
-        if (money >= cost) {
-            money -= cost;
-            Waiter waiter = new Waiter(name);
-            // 根据等级设置初始属性
-            if (tier >= 2) {
-                waiter.gainExp(100);  // 高级服务员初始1级经验
-                addLog("⭐ 招聘了高级服务员：" + name + " (自带经验)");
-            } else if (tier >= 3) {
-                waiter.gainExp(250);  // 金牌服务员初始更高
-                addLog("🏆 招聘了金牌服务员：" + name + " (精英级别)");
-            } else {
-                addLog("👔 招聘了新服务员：" + name);
-            }
-            waiters.add(waiter);
-            return true;
-        }
-        return false;
+        
+        money -= cost;
+        waiters.add(w);
+        waiterPool.remove(index);
+        addLog("[招聘] " + w.getTierName() + "服务员: " + w.getName());
+        return true;
     }
 
     /**
-     * 招聘厨师（普通）
+     * 从招聘池招聘厨师
      */
-    public boolean hireChef(String name, int cost) {
-        return hireChef(name, cost, 1);
-    }
-
-    /**
-     * 招聘厨师（指定等级）
-     * @param tier 1=学徒($300), 2=大厨($800), 3=主厨($1500)
-     */
-    public boolean hireChef(String name, int cost, int tier) {
+    public boolean hireChefFromPool(int index) {
+        if (index < 0 || index >= chefPool.size()) return false;
         if (chefs.size() >= maxChefs) {
-            addLog("❌ 厨师已满员（" + maxChefs + "人）！升级餐厅可扩展");
+            addLog("[错误] 厨师已满员！");
             return false;
         }
-        if (tier > unlockedChefTier) {
-            addLog("❌ 尚未解锁该等级厨师！需要餐厅等级更高");
+        
+        Chef c = chefPool.get(index);
+        int cost = c.getHirePrice();
+        
+        if (money < cost) {
+            addLog("[错误] 资金不足！需要$" + cost);
             return false;
         }
-        if (money >= cost) {
-            money -= cost;
-            Chef chef = new Chef(name);
-            // 根据等级设置初始属性
-            if (tier >= 2) {
-                chef.gainExp(100);  // 大厨初始1级经验
-                addLog("⭐ 招聘了大厨：" + name + " (自带经验)");
-            } else if (tier >= 3) {
-                chef.gainExp(250);  // 主厨初始更高
-                addLog("🏆 招聘了主厨：" + name + " (大师级别)");
-            } else {
-                addLog("👨‍🍳 招聘了学徒厨师：" + name);
-            }
-            chefs.add(chef);
-            return true;
-        }
-        return false;
+        
+        money -= cost;
+        chefs.add(c);
+        chefPool.remove(index);
+        addLog("招聘了 " + c.getTierName() + "厨师: " + c.getName());
+        return true;
     }
 
     /**
-     * 购买桌子
+     * 从招聘池招聘服务员（直接传入对象）
      */
+    public boolean hireWaiterFromPool(Waiter w, int cost) {
+        if (waiters.size() >= maxWaiters) {
+            addLog("服务员已满员！");
+            return false;
+        }
+        if (money < cost) {
+            addLog("资金不足！需要$" + cost);
+            return false;
+        }
+        
+        money -= cost;
+        waiters.add(w);
+        waiterPool.remove(w);
+        addLog("招聘了 " + w.getTierName() + "服务员: " + w.getName());
+        return true;
+    }
+
+    /**
+     * 从招聘池招聘厨师（直接传入对象）
+     */
+    public boolean hireChefFromPool(Chef c, int cost) {
+        if (chefs.size() >= maxChefs) {
+            addLog("厨师已满员！");
+            return false;
+        }
+        if (money < cost) {
+            addLog("资金不足！需要$" + cost);
+            return false;
+        }
+        
+        money -= cost;
+        chefs.add(c);
+        chefPool.remove(c);
+        addLog("招聘了 " + c.getTierName() + "厨师: " + c.getName());
+        return true;
+    }
+
+    /**
+     * 清空所有顾客（建造模式用）
+     */
+    public void clearAllCustomers() {
+        waitingCustomers.clear();
+        for (Table t : tables) {
+            t.clearTable();
+        }
+        allCustomers.clear();
+        orderQueue.clear();
+        activeOrders.clear();
+        addLog("已清空所有顾客");
+    }
+
+    /**
+     * 解雇服务员
+     */
+    public boolean fireWaiter(int index) {
+        if (index < 0 || index >= waiters.size()) return false;
+        
+        Waiter w = waiters.get(index);
+        int compensation = w.getFireCompensation();
+        
+        if (money < compensation) {
+            addLog("[错误] 资金不足支付赔偿金$" + compensation);
+            return false;
+        }
+        
+        money -= compensation;
+        waiters.remove(index);
+        addLog("[解雇] " + w.getName() + " 赔偿$" + compensation);
+        return true;
+    }
+
+    /**
+     * 解雇厨师
+     */
+    public boolean fireChef(int index) {
+        if (index < 0 || index >= chefs.size()) return false;
+        
+        Chef c = chefs.get(index);
+        int compensation = c.getFireCompensation();
+        
+        if (money < compensation) {
+            addLog("[错误] 资金不足支付赔偿金$" + compensation);
+            return false;
+        }
+        
+        money -= compensation;
+        chefs.remove(index);
+        addLog("[解雇] " + c.getName() + " 赔偿$" + compensation);
+        return true;
+    }
+
+    // 兼容旧接口
+    public boolean hireWaiter(String name, int cost, int tier) {
+        if (waiters.size() >= maxWaiters || money < cost) return false;
+        money -= cost;
+        waiters.add(new Waiter(name, tier, 20 + tier*10, 20 + tier*10, 20 + tier*10));
+        return true;
+    }
+    
+    public boolean hireChef(String name, int cost, int tier) {
+        if (chefs.size() >= maxChefs || money < cost) return false;
+        money -= cost;
+        chefs.add(new Chef(name, tier, 20 + tier*10, 20 + tier*10, 20 + tier*10));
+        return true;
+    }
+
     public boolean buyTable(int seats, int cost) {
+        if (tables.size() >= maxTables) {
+            addLog("[错误] 桌子已达上限！升级餐厅解锁更多");
+            return false;
+        }
         if (money >= cost) {
             money -= cost;
             tables.add(new Table(tables.size() + 1, seats));
-            addLog("🪑 购买了新桌子：" + seats + "人桌");
+            addLog("[购买] " + seats + "人桌");
             return true;
         }
         return false;
     }
 
-    /**
-     * 花费金钱
-     */
     public void spendMoney(int amount) {
         money = Math.max(0, money - amount);
     }
 
-    /**
-     * 添加旅店经验（用于手动升级）
-     */
     public void addHotelExp(int amount) {
         hotelExp += amount;
         checkLevelUp();
     }
 
-    /**
-     * 从存档数据恢复（由SaveManager调用）
-     */
-    public void restoreFromSave(Object saveDataObj) {
-        // 使用反射获取SaveData内部类的数据
-        try {
-            Class<?> clazz = saveDataObj.getClass();
-            
-            this.money = (int) clazz.getDeclaredField("money").get(saveDataObj);
-            this.reputation = (int) clazz.getDeclaredField("reputation").get(saveDataObj);
-            this.hotelLevel = (int) clazz.getDeclaredField("hotelLevel").get(saveDataObj);
-            this.hotelExp = (int) clazz.getDeclaredField("hotelExp").get(saveDataObj);
-            this.expToNextLevel = (int) clazz.getDeclaredField("expToNextLevel").get(saveDataObj);
-            this.gameTime = (int) clazz.getDeclaredField("gameTime").get(saveDataObj);
-            this.maxWaiters = (int) clazz.getDeclaredField("maxWaiters").get(saveDataObj);
-            this.maxChefs = (int) clazz.getDeclaredField("maxChefs").get(saveDataObj);
-            this.unlockedWaiterTier = (int) clazz.getDeclaredField("unlockedWaiterTier").get(saveDataObj);
-            this.unlockedChefTier = (int) clazz.getDeclaredField("unlockedChefTier").get(saveDataObj);
-            this.totalCustomersServed = (int) clazz.getDeclaredField("totalCustomersServed").get(saveDataObj);
-            this.totalCustomersLost = (int) clazz.getDeclaredField("totalCustomersLost").get(saveDataObj);
-            this.totalRevenue = (int) clazz.getDeclaredField("totalRevenue").get(saveDataObj);
-            this.totalTips = (int) clazz.getDeclaredField("totalTips").get(saveDataObj);
-
-            // 恢复桌子
-            @SuppressWarnings("unchecked")
-            List<Integer> tableSeats = (List<Integer>) clazz.getDeclaredField("tableSeats").get(saveDataObj);
-            this.tables.clear();
-            int tableId = 1;
-            for (int seats : tableSeats) {
-                this.tables.add(new Table(tableId++, seats));
-            }
-
-            // 恢复菜单
-            @SuppressWarnings("unchecked")
-            List<String> menuDishNames = (List<String>) clazz.getDeclaredField("menuDishNames").get(saveDataObj);
-            this.menu.clear();
-            for (String dishName : menuDishNames) {
-                Dish dish = createDishByName(dishName);
-                if (dish != null) {
-                    this.menu.add(dish);
-                }
-            }
-
-            // 恢复服务员
-            @SuppressWarnings("unchecked")
-            List<?> waiterDataList = (List<?>) clazz.getDeclaredField("waiterDataList").get(saveDataObj);
-            this.waiters.clear();
-            for (Object empData : waiterDataList) {
-                Waiter waiter = restoreWaiter(empData);
-                if (waiter != null) {
-                    this.waiters.add(waiter);
-                }
-            }
-
-            // 恢复厨师
-            @SuppressWarnings("unchecked")
-            List<?> chefDataList = (List<?>) clazz.getDeclaredField("chefDataList").get(saveDataObj);
-            this.chefs.clear();
-            for (Object empData : chefDataList) {
-                Chef chef = restoreChef(empData);
-                if (chef != null) {
-                    this.chefs.add(chef);
-                }
-            }
-
-            addLog("📂 存档已加载！继续你的餐厅帝国之旅！");
-            
-        } catch (Exception e) {
-            System.out.println("恢复存档时出错: " + e.getMessage());
-        }
-    }
-
-    /**
-     * 根据菜品名创建菜品
-     */
-    private Dish createDishByName(String name) {
-        switch (name) {
-            case "蛋炒饭": return Dish.createEggFriedRice();
-            case "番茄炒蛋": return Dish.createTomatoEgg();
-            case "麻婆豆腐": return Dish.createMaPoTofu();
-            case "宫保鸡丁": return Dish.createKungPaoChicken();
-            case "糖醋里脊": return Dish.createSweetSourPork();
-            case "红烧肉": return Dish.createBraisedPork();
-            case "清蒸鱼": return Dish.createSteamedFish();
-            case "北京烤鸭": return Dish.createPekingDuck();
-            case "龙虾": return Dish.createLobster();
-            case "和牛牛排": return Dish.createWagyuSteak();
-            default: return null;
-        }
-    }
-
-    /**
-     * 从存档数据恢复服务员
-     */
-    private Waiter restoreWaiter(Object empData) {
-        try {
-            Class<?> clazz = empData.getClass();
-            String name = (String) clazz.getDeclaredField("name").get(empData);
-            Waiter waiter = new Waiter(name);
-            
-            // 使用反射设置属性
-            setEmployeeFields(waiter, empData);
-            
-            return waiter;
-        } catch (Exception e) {
-            return null;
-        }
-    }
-
-    /**
-     * 从存档数据恢复厨师
-     */
-    private Chef restoreChef(Object empData) {
-        try {
-            Class<?> clazz = empData.getClass();
-            String name = (String) clazz.getDeclaredField("name").get(empData);
-            Chef chef = new Chef(name);
-            
-            // 使用反射设置属性
-            setEmployeeFields(chef, empData);
-            
-            return chef;
-        } catch (Exception e) {
-            return null;
-        }
-    }
-
-    /**
-     * 设置员工属性
-     */
-    private void setEmployeeFields(Employee emp, Object empData) throws Exception {
-        Class<?> dataClass = empData.getClass();
-        Class<?> empClass = emp.getClass().getSuperclass(); // Employee类
-        
-        // 获取并设置属性
-        java.lang.reflect.Field levelField = empClass.getDeclaredField("level");
-        levelField.setAccessible(true);
-        levelField.set(emp, dataClass.getDeclaredField("level").get(empData));
-        
-        java.lang.reflect.Field expField = empClass.getDeclaredField("exp");
-        expField.setAccessible(true);
-        expField.set(emp, dataClass.getDeclaredField("exp").get(empData));
-        
-        java.lang.reflect.Field expNextField = empClass.getDeclaredField("expToNextLevel");
-        expNextField.setAccessible(true);
-        expNextField.set(emp, dataClass.getDeclaredField("expToNextLevel").get(empData));
-        
-        java.lang.reflect.Field profField = empClass.getDeclaredField("proficiency");
-        profField.setAccessible(true);
-        profField.set(emp, dataClass.getDeclaredField("proficiency").get(empData));
-        
-        java.lang.reflect.Field staminaField = empClass.getDeclaredField("stamina");
-        staminaField.setAccessible(true);
-        staminaField.set(emp, dataClass.getDeclaredField("stamina").get(empData));
-        
-        java.lang.reflect.Field maxStaminaField = empClass.getDeclaredField("maxStamina");
-        maxStaminaField.setAccessible(true);
-        maxStaminaField.set(emp, dataClass.getDeclaredField("maxStamina").get(empData));
-    }
-
-    // Getters
+    // ========== Getters and Setters ==========
+    
     public String getName() { return name; }
     public int getMoney() { return money; }
+    public void setMoney(int money) { this.money = money; }
     public int getReputation() { return reputation; }
+    public void setReputation(int reputation) { this.reputation = reputation; }
     public int getHotelLevel() { return hotelLevel; }
+    public void setHotelLevel(int hotelLevel) { this.hotelLevel = hotelLevel; }
     public int getHotelExp() { return hotelExp; }
+    public void setHotelExp(int hotelExp) { this.hotelExp = hotelExp; }
     public int getExpToNextLevel() { return expToNextLevel; }
+    public void setExpToNextLevel(int expToNextLevel) { this.expToNextLevel = expToNextLevel; }
     public List<Waiter> getWaiters() { return waiters; }
     public List<Chef> getChefs() { return chefs; }
     public List<Table> getTables() { return tables; }
@@ -911,15 +919,35 @@ public class Hotel {
     public List<Order> getActiveOrders() { return activeOrders; }
     public List<Customer> getAllCustomers() { return allCustomers; }
     public int getTotalCustomersServed() { return totalCustomersServed; }
+    public void setTotalCustomersServed(int v) { this.totalCustomersServed = v; }
     public int getTotalCustomersLost() { return totalCustomersLost; }
+    public void setTotalCustomersLost(int v) { this.totalCustomersLost = v; }
     public int getTotalRevenue() { return totalRevenue; }
+    public void setTotalRevenue(int v) { this.totalRevenue = v; }
     public int getTotalTips() { return totalTips; }
+    public void setTotalTips(int v) { this.totalTips = v; }
     public int getGameTime() { return gameTime; }
+    public void setGameTime(int gameTime) { this.gameTime = gameTime; }
     public String getCurrentEvent() { return currentEvent; }
     public List<String> getGameLogs() { return gameLogs; }
     public int getMaxWaiters() { return maxWaiters; }
+    public void setMaxWaiters(int v) { this.maxWaiters = v; }
     public int getMaxChefs() { return maxChefs; }
+    public void setMaxChefs(int v) { this.maxChefs = v; }
     public int getUnlockedWaiterTier() { return unlockedWaiterTier; }
+    public void setUnlockedWaiterTier(int v) { this.unlockedWaiterTier = v; }
     public int getUnlockedChefTier() { return unlockedChefTier; }
+    public void setUnlockedChefTier(int v) { this.unlockedChefTier = v; }
+    public double getShopRating() { return shopRating; }
+    public void setShopRating(double v) { this.shopRating = v; }
+    public int getTotalRatings() { return totalRatings; }
+    public void setTotalRatings(int v) { this.totalRatings = v; }
+    public int getGoodRatings() { return goodRatings; }
+    public void setGoodRatings(int v) { this.goodRatings = v; }
+    public List<String> getRecentReviews() { return recentReviews; }
+    public int getMaxTables() { return maxTables; }
+    public void setMaxTables(int maxTables) { this.maxTables = maxTables; }
+    public boolean hasSecondFloor() { return hasSecondFloor; }
+    public List<Waiter> getWaiterPool() { return waiterPool; }
+    public List<Chef> getChefPool() { return chefPool; }
 }
-

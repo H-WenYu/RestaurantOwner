@@ -79,8 +79,8 @@ public class RestaurantPanel extends JPanel {
     }
 
     private void drawKitchen(Graphics2D g, int width, int height) {
-        int kitchenWidth = 150;
-        int kitchenHeight = 80;
+        int kitchenWidth = 180;
+        int kitchenHeight = 100;
         int x = width - kitchenWidth - 20;
         int y = 60;
         
@@ -96,15 +96,22 @@ public class RestaurantPanel extends JPanel {
         // 厨房标签
         g.setColor(Color.WHITE);
         g.setFont(new Font("Microsoft YaHei", Font.BOLD, 14));
-        g.drawString("🍳 厨房", x + 45, y + 25);
+        g.drawString("厨房", x + kitchenWidth/2 - 20, y + 20);
         
         // 绘制厨师
         List<Chef> chefs = hotel.getChefs();
         for (int i = 0; i < chefs.size(); i++) {
             Chef chef = chefs.get(i);
-            int cx = x + 25 + (i % 2) * 60;
-            int cy = y + 40 + (i / 2) * 25;
+            int cx = x + 30 + (i % 2) * 70;
+            int cy = y + 35 + (i / 2) * 35;
             drawChef(g, chef, cx, cy);
+        }
+        
+        // 如果没有厨师，显示提示
+        if (chefs.isEmpty()) {
+            g.setColor(new Color(150, 150, 150));
+            g.setFont(new Font("Microsoft YaHei", Font.PLAIN, 11));
+            g.drawString("请招聘厨师", x + kitchenWidth/2 - 30, y + 60);
         }
     }
 
@@ -126,7 +133,7 @@ public class RestaurantPanel extends JPanel {
         // 标签
         g.setColor(Color.WHITE);
         g.setFont(new Font("Microsoft YaHei", Font.BOLD, 12));
-        g.drawString("🚶 等位区", x + 25, y + 20);
+        g.drawString("等位区", x + 35, y + 20);
         
         // 等位人数
         int waitingCount = hotel.getWaitingCustomers().size();
@@ -152,8 +159,8 @@ public class RestaurantPanel extends JPanel {
             
             g.fillOval(cx, cy, 25, 25);
             g.setColor(Color.WHITE);
-            g.setFont(new Font("Microsoft YaHei", Font.PLAIN, 10));
-            g.drawString("🧑", cx + 4, cy + 18);
+            g.setFont(new Font("Microsoft YaHei", Font.BOLD, 12));
+            g.drawString("人", cx + 5, cy + 18);
             
             col++;
             if (col >= 3) {
@@ -168,8 +175,8 @@ public class RestaurantPanel extends JPanel {
         int tableSize = 60;
         int startX = 160;
         int startY = 80;
-        int cols = 3;
-        int spacing = 100;
+        int cols = 4;
+        int spacing = 90;
         
         for (int i = 0; i < tables.size(); i++) {
             Table table = tables.get(i);
@@ -193,9 +200,9 @@ public class RestaurantPanel extends JPanel {
             
             // 桌号
             g.setColor(Color.WHITE);
-            g.setFont(new Font("Microsoft YaHei", Font.BOLD, 11));
+            g.setFont(new Font("Microsoft YaHei", Font.BOLD, 10));
             String tableLabel = "桌" + table.getId() + " (" + table.getSeats() + "座)";
-            g.drawString(tableLabel, x + 5, y + 15);
+            g.drawString(tableLabel, x + 3, y + 13);
             
             // 如果有顾客，显示顾客状态
             if (table.isOccupied() && table.getCustomer() != null) {
@@ -208,8 +215,8 @@ public class RestaurantPanel extends JPanel {
     private void drawCustomerAtTable(Graphics2D g, Customer c, int x, int y, int tableSize) {
         // 顾客图标
         g.setColor(Color.WHITE);
-        g.setFont(new Font("Microsoft YaHei", Font.PLAIN, 18));
-        g.drawString("🧑", x + tableSize/2 - 8, y + tableSize/2 + 8);
+        g.setFont(new Font("Microsoft YaHei", Font.BOLD, 14));
+        g.drawString("客", x + tableSize/2 - 7, y + tableSize/2 + 5);
         
         // 状态文字
         g.setFont(new Font("Microsoft YaHei", Font.PLAIN, 9));
@@ -230,7 +237,7 @@ public class RestaurantPanel extends JPanel {
                 statusColor = new Color(76, 175, 80);
                 break;
             case FINISHED:
-                status = "吃完了";
+                status = "结账中";
                 statusColor = new Color(33, 150, 243);
                 break;
             default:
@@ -238,7 +245,7 @@ public class RestaurantPanel extends JPanel {
         }
         
         g.setColor(statusColor);
-        g.drawString(status, x + 8, y + tableSize - 5);
+        g.drawString(status, x + 5, y + tableSize - 5);
         
         // 耐心条
         int barWidth = tableSize - 10;
@@ -263,12 +270,19 @@ public class RestaurantPanel extends JPanel {
     private void drawEmployees(Graphics2D g, int width, int height) {
         // 绘制服务员
         List<Waiter> waiters = hotel.getWaiters();
-        int waiterY = height - 90;
+        int waiterY = height - 100;
         
         for (int i = 0; i < waiters.size(); i++) {
             Waiter waiter = waiters.get(i);
             int x = 160 + i * 80;
             drawWaiter(g, waiter, x, waiterY);
+        }
+        
+        // 如果没有服务员，显示提示
+        if (waiters.isEmpty()) {
+            g.setColor(new Color(150, 150, 150));
+            g.setFont(new Font("Microsoft YaHei", Font.PLAIN, 12));
+            g.drawString("请招聘服务员", 200, height - 80);
         }
     }
 
@@ -289,8 +303,8 @@ public class RestaurantPanel extends JPanel {
         g.drawOval(x, y, 35, 35);
         
         // 图标
-        g.setFont(new Font("Microsoft YaHei", Font.PLAIN, 16));
-        g.drawString("👔", x + 8, y + 24);
+        g.setFont(new Font("Microsoft YaHei", Font.BOLD, 14));
+        g.drawString("服", x + 9, y + 24);
         
         // 名字和状态
         g.setFont(new Font("Microsoft YaHei", Font.PLAIN, 9));
@@ -298,7 +312,7 @@ public class RestaurantPanel extends JPanel {
         
         String status = waiter.getName();
         if (waiter.isResting()) {
-            status += " 💤";
+            status += " 休息";
         } else if (waiter.getCurrentTask() != Waiter.WaiterTask.NONE) {
             switch (waiter.getCurrentTask()) {
                 case GREETING: status += " 迎客"; break;
@@ -323,14 +337,19 @@ public class RestaurantPanel extends JPanel {
         }
         g.fillOval(x, y, 30, 30);
         
+        // 边框
         g.setColor(Color.WHITE);
-        g.setFont(new Font("Microsoft YaHei", Font.PLAIN, 14));
-        g.drawString("👨‍🍳", x + 5, y + 22);
+        g.setStroke(new BasicStroke(1));
+        g.drawOval(x, y, 30, 30);
+        
+        // 图标
+        g.setFont(new Font("Microsoft YaHei", Font.BOLD, 12));
+        g.drawString("厨", x + 7, y + 20);
         
         // 状态
         g.setFont(new Font("Microsoft YaHei", Font.PLAIN, 8));
-        String status = chef.isResting() ? "💤" : (chef.isBusy() ? "🔥" : "");
-        g.drawString(status, x + 32, y + 15);
+        String status = chef.isResting() ? "休息" : (chef.isBusy() ? "做菜" : "");
+        g.drawString(status, x + 3, y + 42);
     }
 
     private void drawStaminaBar(Graphics2D g, Employee emp, int x, int y) {
@@ -360,15 +379,14 @@ public class RestaurantPanel extends JPanel {
         if (event != null && !event.isEmpty()) {
             // 事件横幅
             g.setColor(new Color(255, 87, 34, 200));
-            g.fillRoundRect(width/2 - 120, 10, 240, 35, 10, 10);
+            g.fillRoundRect(width/2 - 100, 10, 200, 30, 10, 10);
             
             g.setColor(Color.WHITE);
-            g.setFont(new Font("Microsoft YaHei", Font.BOLD, 14));
-            String eventText = "📢 " + event;
+            g.setFont(new Font("Microsoft YaHei", Font.BOLD, 13));
+            String eventText = "事件: " + event;
             FontMetrics fm = g.getFontMetrics();
             int textX = width/2 - fm.stringWidth(eventText)/2;
-            g.drawString(eventText, textX, 33);
+            g.drawString(eventText, textX, 30);
         }
     }
 }
-

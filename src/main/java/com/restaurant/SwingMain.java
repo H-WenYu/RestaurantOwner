@@ -42,7 +42,7 @@ public class SwingMain {
      */
     private static Hotel showStartupDialog() {
         // 自定义启动对话框
-        JDialog startDialog = new JDialog((Frame) null, "🏨 小旅店发家记", true);
+        JDialog startDialog = new JDialog((Frame) null, "重生之我在餐厅当老板", true);
         startDialog.setSize(500, 400);
         startDialog.setLocationRelativeTo(null);
         startDialog.setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE);
@@ -53,7 +53,7 @@ public class SwingMain {
         mainPanel.setBorder(BorderFactory.createEmptyBorder(30, 40, 30, 40));
         
         // 标题
-        JLabel titleLabel = new JLabel("🏨 小旅店发家记");
+        JLabel titleLabel = new JLabel("重生之我在餐厅当老板");
         titleLabel.setFont(new Font("Microsoft YaHei", Font.BOLD, 28));
         titleLabel.setForeground(new Color(255, 193, 7));
         titleLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
@@ -69,11 +69,11 @@ public class SwingMain {
         
         // 游戏说明
         JTextArea descArea = new JTextArea(
-            "欢迎来到小旅店发家记！\n\n" +
-            "• 从一家小餐馆开始，发展成米其林大酒店\n" +
-            "• 雇佣员工，购买桌子，解锁新菜品\n" +
-            "• 管理顾客，保持声望，赚取利润\n" +
-            "• 随机事件增添乐趣与挑战\n\n" +
+            "欢迎来到重生之我在餐厅当老板！\n\n" +
+            "* 从一家小餐馆开始，发展成米其林大酒店\n" +
+            "* 雇佣员工，购买桌子，解锁新菜品\n" +
+            "* 管理顾客，保持声望，赚取利润\n" +
+            "* 随机事件增添乐趣与挑战\n\n" +
             "游戏会自动保存，下次可以继续！"
         );
         descArea.setEditable(false);
@@ -93,7 +93,7 @@ public class SwingMain {
         
         // 检查是否有存档
         if (SaveManager.hasSaveFile()) {
-            JButton continueBtn = createStyledButton("📂 继续游戏", new Color(76, 175, 80));
+            JButton continueBtn = createStyledButton("继续游戏", new Color(76, 175, 80));
             continueBtn.addActionListener(e -> {
                 result[0] = SaveManager.loadGame();
                 if (result[0] == null) {
@@ -103,7 +103,7 @@ public class SwingMain {
             });
             btnPanel.add(continueBtn);
             
-            JButton newGameBtn = createStyledButton("🆕 新游戏", new Color(33, 150, 243));
+            JButton newGameBtn = createStyledButton("新游戏", new Color(33, 150, 243));
             newGameBtn.addActionListener(e -> {
                 int confirm = JOptionPane.showConfirmDialog(startDialog, 
                     "开始新游戏将覆盖现有存档，确定吗？", 
@@ -115,7 +115,7 @@ public class SwingMain {
             });
             btnPanel.add(newGameBtn);
         } else {
-            JButton startBtn = createStyledButton("🎮 开始游戏", new Color(76, 175, 80));
+            JButton startBtn = createStyledButton("开始游戏", new Color(76, 175, 80));
             startBtn.addActionListener(e -> {
                 result[0] = new Hotel("老王餐馆");
                 startDialog.dispose();
@@ -123,7 +123,7 @@ public class SwingMain {
             btnPanel.add(startBtn);
         }
         
-        JButton exitBtn = createStyledButton("❌ 退出", new Color(244, 67, 54));
+        JButton exitBtn = createStyledButton("退出", new Color(244, 67, 54));
         exitBtn.addActionListener(e -> {
             startDialog.dispose();
             System.exit(0);
@@ -173,4 +173,3 @@ public class SwingMain {
         }
     }
 }
-

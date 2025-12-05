@@ -31,7 +31,8 @@ public class StatusPanel extends JPanel {
         setBackground(new Color(30, 30, 40));
         setBorder(BorderFactory.createEmptyBorder(10, 15, 10, 15));
         
-        nameLabel = createLabel("🏨 " + hotel.getName(), 18, true);
+        nameLabel = createLabel(hotel.getName(), 18, true);
+        nameLabel.setForeground(new Color(255, 193, 7));
         levelLabel = createLabel("Lv.1", 16, true);
         expLabel = createLabel("经验: 0/100", 12, false);
         
@@ -41,13 +42,13 @@ public class StatusPanel extends JPanel {
         expBar.setBackground(new Color(60, 60, 60));
         expBar.setPreferredSize(new Dimension(150, 20));
         
-        moneyLabel = createLabel("💰 $1000", 14, true);
+        moneyLabel = createLabel("$1000", 14, true);
         moneyLabel.setForeground(new Color(255, 215, 0));
         
-        reputationLabel = createLabel("⭐ 30", 14, true);
+        reputationLabel = createLabel("声望 30", 14, true);
         reputationLabel.setForeground(new Color(255, 193, 7));
         
-        timeLabel = createLabel("⏰ 00:00:00", 14, false);
+        timeLabel = createLabel("00:00:00", 14, false);
         
         statsLabel = createLabel("服务: 0 | 流失: 0", 12, false);
     }
@@ -99,10 +100,10 @@ public class StatusPanel extends JPanel {
         expBar.setValue(exp);
         expBar.setString(exp + "/" + expMax);
         
-        moneyLabel.setText("💰 $" + hotel.getMoney());
+        moneyLabel.setText("$" + hotel.getMoney());
         
         int rep = hotel.getReputation();
-        reputationLabel.setText("⭐ " + rep);
+        reputationLabel.setText("声望 " + rep);
         if (rep >= 70) {
             reputationLabel.setForeground(new Color(76, 175, 80));
         } else if (rep >= 40) {
@@ -112,11 +113,10 @@ public class StatusPanel extends JPanel {
         }
         
         int time = hotel.getGameTime();
-        timeLabel.setText(String.format("⏰ %02d:%02d:%02d", time / 3600, (time % 3600) / 60, time % 60));
+        timeLabel.setText(String.format("%02d:%02d:%02d", time / 3600, (time % 3600) / 60, time % 60));
         
         statsLabel.setText("服务: " + hotel.getTotalCustomersServed() + 
                           " | 流失: " + hotel.getTotalCustomersLost() +
                           " | 收入: $" + hotel.getTotalRevenue());
     }
 }
-

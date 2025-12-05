@@ -12,21 +12,15 @@ public class SaveManager {
     private static final String SAVE_FILE = "restaurant_save.dat";
     private static final String SAVE_DIR = getSaveDirectory();
 
-    /**
-     * 获取存档目录（跨平台兼容）
-     */
     private static String getSaveDirectory() {
         String userHome = System.getProperty("user.home");
         String os = System.getProperty("os.name").toLowerCase();
         
         if (os.contains("win")) {
-            // Windows: AppData/Local
             return System.getenv("LOCALAPPDATA") + File.separator + "RestaurantOwner";
         } else if (os.contains("mac")) {
-            // macOS
             return userHome + "/Library/Application Support/RestaurantOwner";
         } else {
-            // Linux 等
             return userHome + "/.restaurantowner";
         }
     }
@@ -36,7 +30,6 @@ public class SaveManager {
      */
     public static boolean saveGame(Hotel hotel) {
         try {
-            // 创建存档目录
             File dir = new File(SAVE_DIR);
             if (!dir.exists()) {
                 dir.mkdirs();
@@ -44,20 +37,96 @@ public class SaveManager {
 
             String savePath = SAVE_DIR + File.separator + SAVE_FILE;
             
-            try (ObjectOutputStream oos = new ObjectOutputStream(
-                    new FileOutputStream(savePath))) {
+            try (DataOutputStream dos = new DataOutputStream(
+                    new BufferedOutputStream(new FileOutputStream(savePath)))) {
                 
-                SaveData data = new SaveData();
-                data.extractFrom(hotel);
-                oos.writeObject(data);
+                // 版本号
+                dos.writeInt(3); // 存档版本（v3增加了maxTables）
+                
+                // 基础数据
+                dos.writeUTF(hotel.getName());
+                dos.writeInt(hotel.getMoney());
+                dos.writeInt(hotel.getReputation());
+                dos.writeInt(hotel.getHotelLevel());
+                dos.writeInt(hotel.getHotelExp());
+                dos.writeInt(hotel.getExpToNextLevel());
+                dos.writeInt(hotel.getGameTime());
+                dos.writeInt(hotel.getMaxWaiters());
+                dos.writeInt(hotel.getMaxChefs());
+                dos.writeInt(hotel.getUnlockedWaiterTier());
+                dos.writeInt(hotel.getUnlockedChefTier());
+                dos.writeInt(hotel.getMaxTables());
+                
+                // 统计数据
+                dos.writeInt(hotel.getTotalCustomersServed());
+                dos.writeInt(hotel.getTotalCustomersLost());
+                dos.writeInt(hotel.getTotalRevenue());
+                dos.writeInt(hotel.getTotalTips());
+                
+                // 评分数据
+                dos.writeDouble(hotel.getShopRating());
+                dos.writeInt(hotel.getTotalRatings());
+                dos.writeInt(hotel.getGoodRatings());
+                
+                // 服务员
+                List<Waiter> waiters = hotel.getWaiters();
+                dos.writeInt(waiters.size());
+                for (Waiter w : waiters) {
+                    saveEmployee(dos, w);
+                    dos.writeInt(w.getTotalTips());
+                    dos.writeInt(w.getServiceSkill());
+                    dos.writeInt(w.getSpeedSkill());
+                    dos.writeInt(w.getCharmSkill());
+                    dos.writeInt(w.getEmployeeTier());
+                }
+                
+                // 厨师
+                List<Chef> chefs = hotel.getChefs();
+                dos.writeInt(chefs.size());
+                for (Chef c : chefs) {
+                    saveEmployee(dos, c);
+                    dos.writeInt(c.getTotalDishesCooked());
+                    dos.writeInt(c.getMaxDishLevel());
+                    dos.writeInt(c.getCookingSkill());
+                    dos.writeInt(c.getSpeedSkill());
+                    dos.writeInt(c.getCharmSkill());
+                    dos.writeInt(c.getEmployeeTier());
+                }
+                
+                // 桌子
+                List<Table> tables = hotel.getTables();
+                dos.writeInt(tables.size());
+                for (Table t : tables) {
+                    dos.writeInt(t.getSeats());
+                    dos.writeInt(t.getLevel());
+                }
+                
+                // 菜单
+                List<Dish> menu = hotel.getMenu();
+                dos.writeInt(menu.size());
+                for (Dish d : menu) {
+                    dos.writeUTF(d.getName());
+                }
                 
                 System.out.println("💾 游戏已保存到: " + savePath);
+                System.out.println("   资金: $" + hotel.getMoney() + " | 等级: Lv." + hotel.getHotelLevel());
                 return true;
             }
         } catch (IOException e) {
             System.out.println("❌ 保存失败: " + e.getMessage());
+            e.printStackTrace();
             return false;
         }
+    }
+
+    private static void saveEmployee(DataOutputStream dos, Employee e) throws IOException {
+        dos.writeUTF(e.getName());
+        dos.writeInt(e.getLevel());
+        dos.writeInt(e.getExp());
+        dos.writeInt(e.getExpToNextLevel());
+        dos.writeInt(e.getProficiency());
+        dos.writeInt(e.getStamina());
+        dos.writeInt(e.getMaxStamina());
     }
 
     /**
@@ -72,33 +141,172 @@ public class SaveManager {
             return null;
         }
 
-        try (ObjectInputStream ois = new ObjectInputStream(
-                new FileInputStream(savePath))) {
+        try (DataInputStream dis = new DataInputStream(
+                new BufferedInputStream(new FileInputStream(savePath)))) {
             
-            SaveData data = (SaveData) ois.readObject();
-            Hotel hotel = data.restoreToHotel();
+            int version = dis.readInt();
+            if (version < 3) {
+                System.out.println("⚠️ 旧版存档不兼容（需要v3+），开始新游戏...");
+                return null;
+            }
             
-            System.out.println("💾 存档加载成功！");
+            // 基础数据
+            String name = dis.readUTF();
+            int money = dis.readInt();
+            int reputation = dis.readInt();
+            int hotelLevel = dis.readInt();
+            int hotelExp = dis.readInt();
+            int expToNextLevel = dis.readInt();
+            int gameTime = dis.readInt();
+            int maxWaiters = dis.readInt();
+            int maxChefs = dis.readInt();
+            int unlockedWaiterTier = dis.readInt();
+            int unlockedChefTier = dis.readInt();
+            int maxTables = dis.readInt();
+            
+            // 统计数据
+            int totalCustomersServed = dis.readInt();
+            int totalCustomersLost = dis.readInt();
+            int totalRevenue = dis.readInt();
+            int totalTips = dis.readInt();
+            
+            // 评分数据
+            double shopRating = dis.readDouble();
+            int totalRatings = dis.readInt();
+            int goodRatings = dis.readInt();
+            
+            // 创建Hotel并恢复数据
+            Hotel hotel = new Hotel(name, false); // 不初始化默认数据
+            hotel.setMoney(money);
+            hotel.setReputation(reputation);
+            hotel.setHotelLevel(hotelLevel);
+            hotel.setHotelExp(hotelExp);
+            hotel.setExpToNextLevel(expToNextLevel);
+            hotel.setGameTime(gameTime);
+            hotel.setMaxWaiters(maxWaiters);
+            hotel.setMaxChefs(maxChefs);
+            hotel.setUnlockedWaiterTier(unlockedWaiterTier);
+            hotel.setUnlockedChefTier(unlockedChefTier);
+            hotel.setMaxTables(maxTables);
+            hotel.setTotalCustomersServed(totalCustomersServed);
+            hotel.setTotalCustomersLost(totalCustomersLost);
+            hotel.setTotalRevenue(totalRevenue);
+            hotel.setTotalTips(totalTips);
+            hotel.setShopRating(shopRating);
+            hotel.setTotalRatings(totalRatings);
+            hotel.setGoodRatings(goodRatings);
+            
+            // 恢复服务员
+            int waiterCount = dis.readInt();
+            for (int i = 0; i < waiterCount; i++) {
+                Waiter w = loadWaiter(dis);
+                hotel.getWaiters().add(w);
+            }
+            
+            // 恢复厨师
+            int chefCount = dis.readInt();
+            for (int i = 0; i < chefCount; i++) {
+                Chef c = loadChef(dis);
+                hotel.getChefs().add(c);
+            }
+            
+            // 恢复桌子
+            int tableCount = dis.readInt();
+            for (int i = 0; i < tableCount; i++) {
+                int seats = dis.readInt();
+                int level = dis.readInt();
+                Table t = new Table(i + 1, seats);
+                t.setLevel(level);
+                hotel.getTables().add(t);
+            }
+            
+            // 恢复菜单
+            int menuCount = dis.readInt();
+            for (int i = 0; i < menuCount; i++) {
+                String dishName = dis.readUTF();
+                Dish dish = createDishByName(dishName);
+                if (dish != null) {
+                    hotel.getMenu().add(dish);
+                }
+            }
+            
+            // 刷新招聘池
+            hotel.refreshEmployeePool();
+            
+            hotel.addLog("[存档] 已加载！资金: $" + money);
+            System.out.println("存档加载成功！资金: $" + money);
             return hotel;
             
-        } catch (IOException | ClassNotFoundException e) {
+        } catch (IOException e) {
             System.out.println("❌ 读取存档失败: " + e.getMessage());
-            System.out.println("📂 开始新游戏...");
+            e.printStackTrace();
             return null;
         }
     }
 
-    /**
-     * 检查是否有存档
-     */
+    private static Waiter loadWaiter(DataInputStream dis) throws IOException {
+        String name = dis.readUTF();
+        int level = dis.readInt();
+        int exp = dis.readInt();
+        int expToNextLevel = dis.readInt();
+        int proficiency = dis.readInt();
+        int stamina = dis.readInt();
+        int maxStamina = dis.readInt();
+        int totalTips = dis.readInt();
+        int serviceSkill = dis.readInt();
+        int speedSkill = dis.readInt();
+        int charmSkill = dis.readInt();
+        int tier = dis.readInt();
+        
+        Waiter w = new Waiter(name, tier, serviceSkill, speedSkill, charmSkill);
+        w.restoreState(level, exp, expToNextLevel, proficiency, stamina, maxStamina);
+        w.setTotalTips(totalTips);
+        return w;
+    }
+
+    private static Chef loadChef(DataInputStream dis) throws IOException {
+        String name = dis.readUTF();
+        int level = dis.readInt();
+        int exp = dis.readInt();
+        int expToNextLevel = dis.readInt();
+        int proficiency = dis.readInt();
+        int stamina = dis.readInt();
+        int maxStamina = dis.readInt();
+        int totalDishesCooked = dis.readInt();
+        int maxDishLevel = dis.readInt();
+        int cookingSkill = dis.readInt();
+        int speedSkill = dis.readInt();
+        int charmSkill = dis.readInt();
+        int tier = dis.readInt();
+        
+        Chef c = new Chef(name, tier, cookingSkill, speedSkill, charmSkill);
+        c.restoreState(level, exp, expToNextLevel, proficiency, stamina, maxStamina);
+        c.setTotalDishesCooked(totalDishesCooked);
+        c.setMaxDishLevel(maxDishLevel);
+        return c;
+    }
+
+    private static Dish createDishByName(String name) {
+        switch (name) {
+            case "蛋炒饭": return Dish.createEggFriedRice();
+            case "番茄炒蛋": return Dish.createTomatoEgg();
+            case "麻婆豆腐": return Dish.createMaPoTofu();
+            case "宫保鸡丁": return Dish.createKungPaoChicken();
+            case "糖醋里脊": return Dish.createSweetSourPork();
+            case "红烧肉": return Dish.createBraisedPork();
+            case "清蒸鱼": return Dish.createSteamedFish();
+            case "北京烤鸭": return Dish.createPekingDuck();
+            case "龙虾": return Dish.createLobster();
+            case "和牛牛排": return Dish.createWagyuSteak();
+            default: return null;
+        }
+    }
+
     public static boolean hasSaveFile() {
         String savePath = SAVE_DIR + File.separator + SAVE_FILE;
         return new File(savePath).exists();
     }
 
-    /**
-     * 删除存档
-     */
     public static boolean deleteSave() {
         String savePath = SAVE_DIR + File.separator + SAVE_FILE;
         File saveFile = new File(savePath);
@@ -107,131 +315,4 @@ public class SaveManager {
         }
         return false;
     }
-
-    /**
-     * 存档数据类 - 保存所有需要持久化的数据
-     */
-    private static class SaveData implements Serializable {
-        private static final long serialVersionUID = 1L;
-
-        // 旅店基础数据
-        String hotelName;
-        int money;
-        int reputation;
-        int hotelLevel;
-        int hotelExp;
-        int expToNextLevel;
-        int gameTime;
-        
-        // 员工限制
-        int maxWaiters;
-        int maxChefs;
-        int unlockedWaiterTier;
-        int unlockedChefTier;
-
-        // 统计数据
-        int totalCustomersServed;
-        int totalCustomersLost;
-        int totalRevenue;
-        int totalTips;
-
-        // 员工数据
-        List<EmployeeData> waiterDataList = new ArrayList<>();
-        List<EmployeeData> chefDataList = new ArrayList<>();
-
-        // 桌子数量
-        List<Integer> tableSeats = new ArrayList<>();
-
-        // 菜单（只保存菜品名，加载时重建）
-        List<String> menuDishNames = new ArrayList<>();
-
-        /**
-         * 从Hotel对象提取数据
-         */
-        void extractFrom(Hotel hotel) {
-            this.hotelName = hotel.getName();
-            this.money = hotel.getMoney();
-            this.reputation = hotel.getReputation();
-            this.hotelLevel = hotel.getHotelLevel();
-            this.hotelExp = hotel.getHotelExp();
-            this.expToNextLevel = hotel.getExpToNextLevel();
-            this.gameTime = hotel.getGameTime();
-            this.maxWaiters = hotel.getMaxWaiters();
-            this.maxChefs = hotel.getMaxChefs();
-            this.unlockedWaiterTier = hotel.getUnlockedWaiterTier();
-            this.unlockedChefTier = hotel.getUnlockedChefTier();
-            this.totalCustomersServed = hotel.getTotalCustomersServed();
-            this.totalCustomersLost = hotel.getTotalCustomersLost();
-            this.totalRevenue = hotel.getTotalRevenue();
-            this.totalTips = hotel.getTotalTips();
-
-            // 保存服务员数据
-            for (Waiter w : hotel.getWaiters()) {
-                waiterDataList.add(new EmployeeData(w));
-            }
-
-            // 保存厨师数据
-            for (Chef c : hotel.getChefs()) {
-                chefDataList.add(new EmployeeData(c));
-            }
-
-            // 保存桌子
-            for (Table t : hotel.getTables()) {
-                tableSeats.add(t.getSeats());
-            }
-
-            // 保存菜单
-            for (Dish d : hotel.getMenu()) {
-                menuDishNames.add(d.getName());
-            }
-        }
-
-        /**
-         * 恢复到Hotel对象
-         */
-        Hotel restoreToHotel() {
-            Hotel hotel = new Hotel(hotelName);
-            
-            // 使用反射或setter恢复数据（这里用公共方法）
-            hotel.restoreFromSave(this);
-            
-            return hotel;
-        }
-    }
-
-    /**
-     * 员工数据（用于序列化）
-     */
-    private static class EmployeeData implements Serializable {
-        private static final long serialVersionUID = 1L;
-        
-        String name;
-        int level;
-        int exp;
-        int expToNextLevel;
-        int proficiency;
-        int stamina;
-        int maxStamina;
-        int totalTips;       // 服务员专用
-        int totalDishesCooked; // 厨师专用
-        int maxDishLevel;    // 厨师专用
-
-        EmployeeData(Employee e) {
-            this.name = e.getName();
-            this.level = e.getLevel();
-            this.exp = e.getExp();
-            this.expToNextLevel = e.getExpToNextLevel();
-            this.proficiency = e.getProficiency();
-            this.stamina = e.getStamina();
-            this.maxStamina = e.getMaxStamina();
-            
-            if (e instanceof Waiter) {
-                this.totalTips = ((Waiter) e).getTotalTips();
-            } else if (e instanceof Chef) {
-                this.totalDishesCooked = ((Chef) e).getTotalDishesCooked();
-                this.maxDishLevel = ((Chef) e).getMaxDishLevel();
-            }
-        }
-    }
 }
-
