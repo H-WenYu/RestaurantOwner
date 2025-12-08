@@ -10,6 +10,9 @@ public class Table {
     private int level;          // 桌子等级 1-5
     private Customer customer;
     private boolean occupied;
+    
+    // 位置属性（用于服务员移动）
+    private int posX, posY;
 
     // 升级价格
     private static final int[] UPGRADE_COSTS = {0, 100, 300, 600, 1000};
@@ -72,6 +75,11 @@ public class Table {
     public void setLevel(int level) { this.level = level; }
     public Customer getCustomer() { return customer; }
     public boolean isOccupied() { return occupied; }
+    
+    // 位置相关
+    public int getPosX() { return posX; }
+    public int getPosY() { return posY; }
+    public void setPosition(int x, int y) { this.posX = x; this.posY = y; }
 
     @Override
     public String toString() {

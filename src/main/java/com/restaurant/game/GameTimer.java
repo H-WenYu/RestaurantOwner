@@ -24,10 +24,6 @@ public class GameTimer implements Runnable {
     public void setTickListener(GameTickListener listener) {
         this.listener = listener;
     }
-
-    /**
-     * 开始游戏
-     */
     public void start() {
         if (!running) {
             running = true;
@@ -35,24 +31,13 @@ public class GameTimer implements Runnable {
         }
     }
 
-    /**
-     * 停止游戏
-     */
     public void stop() {
         running = false;
     }
-
-    /**
-     * 暂停/继续
-     */
     public void togglePause() {
         paused = !paused;
     }
 
-    /**
-     * 设置游戏速度
-     * @param speed 1=正常, 2=2倍速, 4=4倍速
-     */
     public void setSpeed(int speed) {
         this.tickInterval = 1000 / Math.max(1, speed);
     }
@@ -76,8 +61,6 @@ public class GameTimer implements Runnable {
             }
         }
     }
-
-    // Getters
     public boolean isRunning() { return running; }
     public boolean isPaused() { return paused; }
     public int getTickInterval() { return tickInterval; }

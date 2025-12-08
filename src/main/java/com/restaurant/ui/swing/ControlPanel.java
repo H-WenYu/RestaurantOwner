@@ -620,45 +620,48 @@ public class ControlPanel extends JPanel {
         int level = hotel.getHotelLevel();
         int exp = hotel.getHotelExp();
         int expMax = hotel.getExpToNextLevel();
-        int expNeeded = expMax - exp;
-        int upgradeCost = expNeeded * 5;
+        boolean canUpgrade = hotel.canLevelUp();
+        int upgradeCost = hotel.getUpgradeCost();
         
-        String message = String.format(
-            "当前等级: Lv.%d\n经验进度: %d / %d\n还需经验: %d\n\n立即升级费用: $%d\n\n选择操作:",
-            level, exp, expMax, expNeeded, upgradeCost);
+        StringBuilder message = new StringBuilder();
+        message.append(String.format("当前等级: Lv.%d / 150\n", level));
+        message.append(String.format("经验进度: %d / %d\n\n", exp, expMax));
         
-        String[] options = {"立即升级 ($" + upgradeCost + ")", "购买50经验 ($250)", "购买100经验 ($450)", "取消"};
-        int choice = JOptionPane.showOptionDialog(gameWindow, message, "餐厅升级",
-            JOptionPane.DEFAULT_OPTION, JOptionPane.PLAIN_MESSAGE, null, options, options[0]);
+        if (canUpgrade) {
+            message.append("✅ 经验已满！可以升级\n");
+            message.append(String.format("升级费用: $%d\n\n", upgradeCost));
+            message.append(String.format("当前资金: $%d", hotel.getMoney()));
+        } else {
+            int expNeeded = expMax - exp;
+            message.append(String.format("还需经验: %d\n\n", expNeeded));
+            message.append("📌 经验来源：\n");
+            message.append("  - 顾客消费\n");
+            message.append("  - 员工工作\n");
+            message.append("  - 菜品售出");
+        }
         
-        switch (choice) {
-            case 0:
-                if (hotel.getMoney() >= upgradeCost) {
-                    hotel.spendMoney(upgradeCost);
-                    hotel.addHotelExp(expNeeded);
-                    JOptionPane.showMessageDialog(gameWindow, "升级成功！");
+        if (level >= 150) {
+            JOptionPane.showMessageDialog(gameWindow, 
+                "🎉 恭喜！您已达到最高等级 Lv.150！", 
+                "已满级", JOptionPane.INFORMATION_MESSAGE);
+            return;
+        }
+        
+        if (canUpgrade) {
+            String[] options = {"升级 ($" + upgradeCost + ")", "取消"};
+            int choice = JOptionPane.showOptionDialog(gameWindow, message.toString(), "餐厅升级",
+                JOptionPane.DEFAULT_OPTION, JOptionPane.PLAIN_MESSAGE, null, options, options[0]);
+            
+            if (choice == 0) {
+                if (hotel.performLevelUp()) {
+                    JOptionPane.showMessageDialog(gameWindow, 
+                        "🎉 升级成功！现在是 Lv." + hotel.getHotelLevel() + "！");
                 } else {
-                    JOptionPane.showMessageDialog(gameWindow, "资金不足！");
+                    JOptionPane.showMessageDialog(gameWindow, "升级失败！资金不足");
                 }
-                break;
-            case 1:
-                if (hotel.getMoney() >= 250) {
-                    hotel.spendMoney(250);
-                    hotel.addHotelExp(50);
-                    JOptionPane.showMessageDialog(gameWindow, "购买成功！经验 +50");
-                } else {
-                    JOptionPane.showMessageDialog(gameWindow, "资金不足！");
-                }
-                break;
-            case 2:
-                if (hotel.getMoney() >= 450) {
-                    hotel.spendMoney(450);
-                    hotel.addHotelExp(100);
-                    JOptionPane.showMessageDialog(gameWindow, "购买成功！经验 +100");
-                } else {
-                    JOptionPane.showMessageDialog(gameWindow, "资金不足！");
-                }
-                break;
+            }
+        } else {
+            JOptionPane.showMessageDialog(gameWindow, message.toString(), "餐厅升级", JOptionPane.INFORMATION_MESSAGE);
         }
     }
 

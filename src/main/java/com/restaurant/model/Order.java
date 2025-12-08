@@ -12,8 +12,9 @@ public class Order {
     private int id;
     private Customer customer;
     private List<Dish> dishes;
-    private List<Dish> completedDishes;
-    private List<Dish> pendingDishes;
+    private List<Dish> completedDishes;    // 已完成的菜品
+    private List<Dish> claimedDishes;      // 已被服务员领取的菜品（送餐中）
+    private List<Dish> pendingDishes;      // 待烹饪的菜品
     private OrderState state;
     private int createTime;  // 创建时间（游戏tick）
 
@@ -30,6 +31,7 @@ public class Order {
         this.customer = customer;
         this.dishes = new ArrayList<>(customer.getOrders());
         this.completedDishes = new ArrayList<>();
+        this.claimedDishes = new ArrayList<>();
         this.pendingDishes = new ArrayList<>(dishes);
         this.state = OrderState.PENDING;
         this.createTime = currentTick;
@@ -66,25 +68,57 @@ public class Order {
     }
 
     /**
-     * 获取一道已完成的菜用于上菜
+     * 领取一道已完成的菜用于上菜（转移到已领取列表）
      */
-    public Dish getCompletedDishForDelivery() {
+    public Dish claimDishForDelivery() {
         if (completedDishes.isEmpty()) return null;
-        return completedDishes.remove(0);
+        Dish dish = completedDishes.remove(0);
+        claimedDishes.add(dish);  // 标记为已领取
+        return dish;
+    }
+    
+    /**
+     * 确认菜品已送达
+     */
+    public void confirmDishDelivered(Dish dish) {
+        claimedDishes.remove(dish);
+    }
+    
+    /**
+     * 退回菜品（如果送餐失败）
+     */
+    public void returnDish(Dish dish) {
+        if (claimedDishes.remove(dish)) {
+            completedDishes.add(0, dish);  // 放回待上菜列表头部
+        }
     }
 
     /**
-     * 检查是否有菜可以上
+     * 检查是否有未被领取的已完成菜品
+     */
+    public boolean hasUnclaimedDishes() {
+        return !completedDishes.isEmpty();
+    }
+    
+    /**
+     * 检查是否有菜可以上（兼容旧方法）
      */
     public boolean hasCompletedDishes() {
         return !completedDishes.isEmpty();
+    }
+    
+    /**
+     * 获取已完成菜品用于上菜（兼容旧方法，实际调用claimDishForDelivery）
+     */
+    public Dish getCompletedDishForDelivery() {
+        return claimDishForDelivery();
     }
 
     /**
      * 检查是否所有菜都已送达
      */
     public boolean isFullyDelivered() {
-        return pendingDishes.isEmpty() && completedDishes.isEmpty();
+        return pendingDishes.isEmpty() && completedDishes.isEmpty() && claimedDishes.isEmpty();
     }
 
     /**

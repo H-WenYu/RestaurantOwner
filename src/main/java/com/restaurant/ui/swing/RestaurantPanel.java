@@ -24,6 +24,9 @@ public class RestaurantPanel extends JPanel {
     private static final Color CUSTOMER_ANGRY = new Color(244, 67, 54);
     private static final Color KITCHEN_COLOR = new Color(80, 80, 80);
     private static final Color WAITING_AREA = new Color(70, 70, 80);
+    
+    // 厨房出菜口位置常量
+    private int kitchenPickupX, kitchenPickupY;
 
     public RestaurantPanel(Hotel hotel) {
         this.hotel = hotel;
@@ -183,6 +186,9 @@ public class RestaurantPanel extends JPanel {
             int x = startX + (i % cols) * spacing;
             int y = startY + (i / cols) * spacing;
             
+            // 设置桌子位置（供服务员移动使用）
+            table.setPosition(x, y);
+            
             // 桌子颜色
             if (table.isOccupied()) {
                 g.setColor(TABLE_OCCUPIED);
@@ -270,19 +276,58 @@ public class RestaurantPanel extends JPanel {
     private void drawEmployees(Graphics2D g, int width, int height) {
         // 绘制服务员
         List<Waiter> waiters = hotel.getWaiters();
-        int waiterY = height - 100;
+        
+        // 厨房位置（右上角）
+        int kitchenX = width - 180 - 20;  // 厨房左上角X
+        int kitchenY = 60;                // 厨房左上角Y
+        
+        // 设置厨房出菜口位置（厨房下方）
+        kitchenPickupX = kitchenX + 90;
+        kitchenPickupY = kitchenY + 110;
+        
+        // 服务员休息位置（厨房正下方，紧贴厨师）
+        int waiterHomeY = kitchenY + 120;
+        int waiterStartX = kitchenX + 20;
         
         for (int i = 0; i < waiters.size(); i++) {
             Waiter waiter = waiters.get(i);
-            int x = 160 + i * 80;
-            drawWaiter(g, waiter, x, waiterY);
+            // 服务员排成一排，在厨房正下方
+            int homeX = waiterStartX + i * 45;
+            int homeY = waiterHomeY;
+            
+            // 始终更新home位置
+            waiter.setHomePosition(homeX, homeY);
+            
+            // 初始化服务员位置（首次渲染时）
+            if (waiter.getPosX() == 0 && waiter.getPosY() == 0) {
+                waiter.setPosition(homeX, homeY);
+            }
+            
+            // 如果服务员空闲且不在home位置，让他回家
+            if (waiter.getCurrentTask() == Waiter.WaiterTask.NONE && !waiter.isMoving()) {
+                double dist = Math.abs(waiter.getPosX() - homeX) + Math.abs(waiter.getPosY() - homeY);
+                if (dist > 10) {
+                    waiter.setTarget(homeX, homeY);
+                }
+            }
+            
+            // 如果服务员要走向厨房，设置目标
+            if (waiter.getCurrentTask() == Waiter.WaiterTask.WALKING_TO_KITCHEN 
+                && !waiter.isMoving()) {
+                waiter.setTarget(kitchenPickupX, kitchenPickupY);
+            }
+            
+            // 使用实际位置绘制服务员
+            int drawX = (int) waiter.getPosX();
+            int drawY = (int) waiter.getPosY();
+            drawWaiter(g, waiter, drawX, drawY);
         }
         
         // 如果没有服务员，显示提示
         if (waiters.isEmpty()) {
             g.setColor(new Color(150, 150, 150));
             g.setFont(new Font("Microsoft YaHei", Font.PLAIN, 12));
-            g.drawString("请招聘服务员", 200, height - 80);
+            g.drawString("请招聘服务员", kitchenX, waiterHomeY + 30);
         }
     }
 

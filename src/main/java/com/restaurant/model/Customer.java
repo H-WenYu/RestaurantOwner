@@ -82,7 +82,7 @@ public class Customer {
             this.name = type.name + "#" + id;
         }
         
-        this.maxPatience = 30 + random.nextInt(40) + (type == CustomerType.VIP ? 20 : 0);
+        this.maxPatience = 120 + random.nextInt(120) + (type == CustomerType.VIP ? 60 : 0);
         this.patience = maxPatience;
         this.hunger = random.nextInt(30);
         this.money = 100 + random.nextInt(400) + type.level * 50;
@@ -205,16 +205,42 @@ public class Customer {
 
     /**
      * 获取评分（1-5.5星）
+     * 基于：出餐速度（耐心剩余）、菜品满意度（厨艺）、服务综合评价
+     * 正常服务平均在4.7-5.3区间
      */
     public double getRating() {
         if (state == CustomerState.LEFT_ANGRY) {
-            return 1.0 + random.nextDouble();
+            return 1.0 + random.nextDouble();  // 生气离开：1-2星
         }
         
+        // 耐心比例（出餐速度影响）- 占比30%
         double patienceRatio = (double) patience / maxPatience;
-        int avgSatisfaction = orders.isEmpty() ? 50 : totalSatisfaction / orders.size();
+        double speedScore = patienceRatio;  // 0~1
         
-        double rating = 2.5 + patienceRatio * 1.5 + avgSatisfaction * 0.02;
+        // 菜品满意度（厨艺影响）- 占比40%
+        double satisfactionScore = 0.7;  // 基础0.7
+        if (!orders.isEmpty() && dishesReceived > 0) {
+            int avgSatisfaction = totalSatisfaction / dishesReceived;
+            satisfactionScore = Math.min(1.0, avgSatisfaction / 100.0 + 0.3);  // 30~100 -> 0.6~1.3 capped at 1.0
+        }
+        
+        // 服务加成（完成用餐）- 占比30%
+        double serviceScore = (state == CustomerState.FINISHED || state == CustomerState.LEFT_HAPPY) ? 0.9 : 0.7;
+        
+        // 综合评分：基础4.0 + 速度加成(0~0.6) + 满意度加成(0~0.6) + 服务加成(0~0.4) + 随机(±0.2)
+        double rating = 4.0 
+            + speedScore * 0.6      // 快速出餐最多+0.6
+            + satisfactionScore * 0.6   // 好吃最多+0.6
+            + serviceScore * 0.4    // 服务好最多+0.4
+            + (random.nextDouble() - 0.5) * 0.4;  // 随机±0.2
+        
+        // 特殊顾客更挑剔
+        if (type == CustomerType.FOOD_CRITIC) {
+            rating -= 0.3;  // 评论家更严格
+        } else if (type == CustomerType.VIP) {
+            rating += 0.2;  // VIP 更宽容
+        }
+        
         rating = Math.max(1.0, Math.min(5.5, rating));
         
         // 四舍五入到0.5

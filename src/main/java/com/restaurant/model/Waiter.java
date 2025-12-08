@@ -14,9 +14,19 @@ public class Waiter extends Employee {
     private Dish carryingDish;    // 正在运送的菜品
     private int taskTimer;
     private WaiterTask currentTask;
+    
+    // 位置属性（用于移动动画）
+    private double posX, posY;         // 当前位置
+    private double targetX, targetY;   // 目标位置
+    private double homeX, homeY;       // 休息位置
+    private boolean moving;            // 是否正在移动
+    private int targetTableId = -1;    // 目标桌子ID（用于送餐）
 
     public enum WaiterTask {
-        NONE, GREETING, TAKING_ORDER, DELIVERING
+        NONE, GREETING, TAKING_ORDER, 
+        WALKING_TO_KITCHEN,   // 走向厨房拿菜
+        WALKING_TO_TABLE,     // 端菜走向桌子
+        DELIVERING            // 送达菜品（兼容旧逻辑）
     }
 
     /**
@@ -39,6 +49,15 @@ public class Waiter extends Employee {
         this.carryingOrder = null;
         this.taskTimer = 0;
         this.currentTask = WaiterTask.NONE;
+        
+        // 初始化位置（默认值，会被UI更新）
+        this.posX = 0;
+        this.posY = 0;
+        this.targetX = 0;
+        this.targetY = 0;
+        this.homeX = 0;
+        this.homeY = 0;
+        this.moving = false;
     }
 
     /**
@@ -188,10 +207,88 @@ public class Waiter extends Employee {
         switch (currentTask) {
             case GREETING: taskStr = "[迎客" + taskTimer + "s]"; break;
             case TAKING_ORDER: taskStr = "[点单" + taskTimer + "s]"; break;
+            case WALKING_TO_KITCHEN: taskStr = "[走向厨房]"; break;
+            case WALKING_TO_TABLE: taskStr = "[送餐中]"; break;
             case DELIVERING: taskStr = "[上菜" + taskTimer + "s]"; break;
             default: break;
         }
         return "👔" + super.toString() + " " + taskStr + 
                String.format(" [服务:%d 速度:%d 魅力:%d]", serviceSkill, speedSkill, charmSkill);
     }
+    
+    // ========== 移动相关方法 ==========
+    
+    /**
+     * 获取移动速度（基于速度技能）
+     * @return 每tick移动的像素数 (15~35)
+     */
+    public double getMoveSpeed() {
+        return 15.0 + (speedSkill / 100.0) * 20.0;
+    }
+    
+    /**
+     * 设置移动目标
+     */
+    public void setTarget(double x, double y) {
+        this.targetX = x;
+        this.targetY = y;
+        this.moving = true;
+    }
+    
+    /**
+     * 更新位置（每tick调用）
+     * @return true如果仍在移动，false如果已到达
+     */
+    public boolean updatePosition() {
+        if (!moving) return false;
+        
+        double dx = targetX - posX;
+        double dy = targetY - posY;
+        double distance = Math.sqrt(dx * dx + dy * dy);
+        double speed = getMoveSpeed();
+        
+        if (distance <= speed) {
+            // 已到达目标
+            posX = targetX;
+            posY = targetY;
+            moving = false;
+            return false;
+        } else {
+            // 继续移动
+            double ratio = speed / distance;
+            posX += dx * ratio;
+            posY += dy * ratio;
+            return true;
+        }
+    }
+    
+    /**
+     * 检查是否已到达目标
+     */
+    public boolean hasReachedTarget() {
+        return !moving;
+    }
+    
+    /**
+     * 移动到家（休息位置）
+     */
+    public void moveToHome() {
+        setTarget(homeX, homeY);
+    }
+    
+    // 位置相关 Getters and Setters
+    public double getPosX() { return posX; }
+    public double getPosY() { return posY; }
+    public void setPosX(double posX) { this.posX = posX; }
+    public void setPosY(double posY) { this.posY = posY; }
+    public void setPosition(double x, double y) { this.posX = x; this.posY = y; }
+    public double getTargetX() { return targetX; }
+    public double getTargetY() { return targetY; }
+    public double getHomeX() { return homeX; }
+    public double getHomeY() { return homeY; }
+    public void setHomePosition(double x, double y) { this.homeX = x; this.homeY = y; }
+    public boolean isMoving() { return moving; }
+    public void setMoving(boolean moving) { this.moving = moving; }
+    public int getTargetTableId() { return targetTableId; }
+    public void setTargetTableId(int tableId) { this.targetTableId = tableId; }
 }
