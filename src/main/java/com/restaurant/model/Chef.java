@@ -111,6 +111,16 @@ public class Chef extends Employee {
     }
 
     /**
+     * 取消当前烹饪任务（顾客离开等异常情况）
+     */
+    public void cancelCooking() {
+        this.currentOrder = null;
+        this.currentDish = null;
+        this.cookTimer = 0;
+        this.busy = false;
+    }
+
+    /**
      * 检查是否把菜做焦了（厨艺影响）
      * 前期基本不会发生
      */
