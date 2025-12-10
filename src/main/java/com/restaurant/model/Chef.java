@@ -5,8 +5,8 @@ package com.restaurant.model;
  * 属性：厨艺、速度、魅力
  */
 public class Chef extends Employee {
-    private int cookingSkill;       // 厨艺技能 1-100
-    private int maxDishLevel;       // 能做的最高菜品等级
+    private int cookingSkill; // 厨艺技能 1-100
+    private int maxDishLevel; // 能做的最高菜品等级
     private Order currentOrder;
     private int cookTimer;
     private int totalDishesCooked;
@@ -14,11 +14,12 @@ public class Chef extends Employee {
 
     /**
      * 创建厨师
-     * @param name 名字
-     * @param tier 品质等级 (1=实习, 2=普通, 3=中级, 4=高级, 5=特技)
+     * 
+     * @param name    名字
+     * @param tier    品质等级 (1=实习, 2=普通, 3=中级, 4=高级, 5=特技)
      * @param cooking 厨艺技能
-     * @param speed 速度技能
-     * @param charm 魅力技能
+     * @param speed   速度技能
+     * @param charm   魅力技能
      */
     public Chef(String name, int tier, int cooking, int speed, int charm) {
         super(name, tier);
@@ -43,20 +44,20 @@ public class Chef extends Employee {
      * 生成随机厨师
      */
     public static Chef generateRandom(int tier, int shopLevel) {
-        String[] names = {"老王", "老李", "老张", "老刘", "阿强", "大厨", "小厨", 
-                         "铁柱", "二蛋", "狗剩", "建国", "国强", "志明", "伟哥"};
-        String name = names[(int)(Math.random() * names.length)] + "#" + (int)(Math.random() * 1000);
-        
+        String[] names = { "老王", "老李", "老张", "老刘", "阿强", "大厨", "小厨",
+                "铁柱", "二蛋", "狗剩", "建国", "国强", "志明", "伟哥" };
+        String name = names[(int) (Math.random() * names.length)] + "#" + (int) (Math.random() * 1000);
+
         // 根据等级和店铺等级生成属性
         int baseSkill = tier * 15 + shopLevel;
-        int cooking = baseSkill + (int)(Math.random() * 25) - 10;
-        int speed = baseSkill + (int)(Math.random() * 25) - 10;
-        int charm = baseSkill + (int)(Math.random() * 25) - 10;
-        
+        int cooking = baseSkill + (int) (Math.random() * 25) - 10;
+        int speed = baseSkill + (int) (Math.random() * 25) - 10;
+        int charm = baseSkill + (int) (Math.random() * 25) - 10;
+
         cooking = Math.max(5, Math.min(100, cooking));
         speed = Math.max(5, Math.min(100, speed));
         charm = Math.max(5, Math.min(100, charm));
-        
+
         return new Chef(name, tier, cooking, speed, charm);
     }
 
@@ -96,7 +97,7 @@ public class Chef extends Employee {
         double efficiency = getEfficiency() + cookingSkill * 0.01 + speedSkill * 0.01;
         // 基础时间减半，效率再加成
         int baseTime = Math.max(1, dish.getCookTime() / 2);
-        return Math.max(1, (int)(baseTime / efficiency));
+        return Math.max(1, (int) (baseTime / efficiency));
     }
 
     public void finishCooking() {
@@ -122,15 +123,33 @@ public class Chef extends Employee {
 
     /**
      * 检查是否把菜做焦了（厨艺影响）
-     * 前期基本不会发生
+     * 前期基本不会发生，但高等级菜对低等级厨师风险更大
      */
     public boolean checkBurnDish() {
-        // 等级低于30基本不会做焦
-        if (level < 30) {
-            return false;  // 前期不会做焦
+        return checkBurnDish(null);
+    }
+
+    /**
+     * 检查是否把菜做焦了（厨艺影响 + 菜品等级差异）
+     * 高等级菜对低等级厨师返回更高的失败率
+     */
+    public boolean checkBurnDish(Dish dish) {
+        // 等级低于30且做的是同等级或更低等级的菜基本不会做焦
+        if (level < 30 && (dish == null || dish.getLevel() <= maxDishLevel)) {
+            return false; // 前期不会做焦
         }
-        // 30级以上有极小概率
+
+        // 计算基础烧焦概率
         double burnRate = 0.02 - (cookingSkill * 0.0005);
+
+        // 如果菜品等级高于厨师最大可做等级，增加烧焦风险
+        if (dish != null) {
+            int levelDiff = dish.getLevel() - maxDishLevel;
+            if (levelDiff > 0) {
+                burnRate += levelDiff * 0.05; // 每差1级增加5%失败率
+            }
+        }
+
         return Math.random() < Math.max(0.005, burnRate);
     }
 
@@ -152,21 +171,46 @@ public class Chef extends Employee {
     }
 
     // Getters and Setters
-    public int getCookingSkill() { return cookingSkill; }
-    public int getMaxDishLevel() { return maxDishLevel; }
-    public void setMaxDishLevel(int maxDishLevel) { this.maxDishLevel = maxDishLevel; }
-    public Order getCurrentOrder() { return currentOrder; }
-    public int getCookTimer() { return cookTimer; }
-    public void setCookTimer(int cookTimer) { this.cookTimer = cookTimer; }
-    public int getTotalDishesCooked() { return totalDishesCooked; }
-    public void setTotalDishesCooked(int totalDishesCooked) { this.totalDishesCooked = totalDishesCooked; }
-    public Dish getCurrentDish() { return currentDish; }
+    public int getCookingSkill() {
+        return cookingSkill;
+    }
+
+    public int getMaxDishLevel() {
+        return maxDishLevel;
+    }
+
+    public void setMaxDishLevel(int maxDishLevel) {
+        this.maxDishLevel = maxDishLevel;
+    }
+
+    public Order getCurrentOrder() {
+        return currentOrder;
+    }
+
+    public int getCookTimer() {
+        return cookTimer;
+    }
+
+    public void setCookTimer(int cookTimer) {
+        this.cookTimer = cookTimer;
+    }
+
+    public int getTotalDishesCooked() {
+        return totalDishesCooked;
+    }
+
+    public void setTotalDishesCooked(int totalDishesCooked) {
+        this.totalDishesCooked = totalDishesCooked;
+    }
+
+    public Dish getCurrentDish() {
+        return currentDish;
+    }
 
     @Override
     public String toString() {
-        String cookStr = (currentDish != null) ? 
-            " [做:" + currentDish.getName() + " " + cookTimer + "s]" : "";
-        return "👨‍🍳" + super.toString() + cookStr + 
-               String.format(" [厨艺:%d 速度:%d 魅力:%d]", cookingSkill, speedSkill, charmSkill);
+        String cookStr = (currentDish != null) ? " [做:" + currentDish.getName() + " " + cookTimer + "s]" : "";
+        return "👨‍🍳" + super.toString() + cookStr +
+                String.format(" [厨艺:%d 速度:%d 魅力:%d]", cookingSkill, speedSkill, charmSkill);
     }
 }
