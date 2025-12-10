@@ -1,0 +1,21 @@
+server:
+  port: 9090
+
+spring:
+  jackson:
+    date-format: yyyy-MM-dd HH:mm:ss
+    time-zone: Asia/Shanghai
+    serialization:
+      write-dates-as-timestamps: false
+
+# 游戏配置
+game:
+  tick-interval-ms: 1000         # 游戏tick间隔（毫秒）
+  session-timeout-minutes: 30    # 会话超时时间
+  max-sessions: 1000             # 最大同时在线用户数
+
+# 日志配置
+logging:
+  level:
+    com.restaurant: DEBUG
+    org.springframework.web: INFO
