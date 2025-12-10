@@ -41,7 +41,7 @@ public class SaveManager {
                     new BufferedOutputStream(new FileOutputStream(savePath)))) {
                 
                 // 版本号
-                dos.writeInt(3); // 存档版本（v3增加了maxTables）
+                dos.writeInt(4); // 存档版本（v4增加菜品属性与菜单选择）
                 
                 // 基础数据
                 dos.writeUTF(hotel.getName());
@@ -101,11 +101,20 @@ public class SaveManager {
                     dos.writeInt(t.getLevel());
                 }
                 
-                // 菜单
+                // 菜单（当前上架）
                 List<Dish> menu = hotel.getMenu();
                 dos.writeInt(menu.size());
                 for (Dish d : menu) {
                     dos.writeUTF(d.getName());
+                }
+
+                // 菜谱池（包含菜品等级与经验）
+                List<Dish> pool = hotel.getMenuPool();
+                dos.writeInt(pool.size());
+                for (Dish d : pool) {
+                    dos.writeUTF(d.getName());
+                    dos.writeInt(d.getDishLevel());
+                    dos.writeInt(d.getDishExp());
                 }
                 
                 System.out.println("💾 游戏已保存到: " + savePath);
@@ -220,16 +229,29 @@ public class SaveManager {
                 hotel.getTables().add(t);
             }
             
-            // 恢复菜单
+            // 准备菜谱池（先构建，再恢复等级/经验与上架列表）
+            hotel.setupMenuPool();
+
+            // 恢复上架菜单
             int menuCount = dis.readInt();
+            List<String> activeMenuNames = new ArrayList<>();
             for (int i = 0; i < menuCount; i++) {
-                String dishName = dis.readUTF();
-                Dish dish = createDishByName(dishName);
-                if (dish != null) {
-                    hotel.getMenu().add(dish);
+                activeMenuNames.add(dis.readUTF());
+            }
+
+            // 恢复菜谱池等级/经验（v4+）
+            if (version >= 4) {
+                int poolCount = dis.readInt();
+                for (int i = 0; i < poolCount; i++) {
+                    String dishName = dis.readUTF();
+                    int dishLevel = dis.readInt();
+                    int dishExp = dis.readInt();
+                    hotel.applyDishProgress(dishName, dishLevel, dishExp);
                 }
             }
-            
+
+            hotel.setMenuByNames(activeMenuNames);
+
             // 刷新招聘池
             hotel.refreshEmployeePool();
             

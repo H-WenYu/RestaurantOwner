@@ -1,5 +1,6 @@
 package com.restaurant.game;
 
+import com.restaurant.config.MenuConfigLoader;
 import com.restaurant.model.*;
 
 import java.util.*;
@@ -18,6 +19,7 @@ public class Hotel {
     private List<Chef> chefs;
     private List<Table> tables;
     private List<Dish> menu;
+    private List<Dish> menuPool;
     private List<Waiter> waiterPool;
     private List<Chef> chefPool;
     private int lastPoolRefresh;
@@ -28,6 +30,7 @@ public class Hotel {
     private Queue<Customer> waitingCustomers;
     private Queue<Order> orderQueue;
     private List<Order> activeOrders;
+    private Queue<PreparedDish> passCounter;
     private List<Customer> allCustomers;
     private int totalCustomersServed;
     private int totalCustomersLost;
@@ -45,6 +48,14 @@ public class Hotel {
     private int eventTimer;
     private List<String> gameLogs;
     private static final int MAX_LOGS = 30;
+    private int ambienceScore;
+    private int cleanliness;
+    private List<Decoration> decorations;
+    private static final int MAX_ACTIVE_DISH = 4;
+
+    private static final int LAYOUT_WIDTH = 600;
+    private static final int LAYOUT_HEIGHT = 400;
+    private static final int TABLE_MIN_DISTANCE = 50;
     public Hotel(String name) {
         this(name, true);
     }
@@ -56,14 +67,17 @@ public class Hotel {
         this.chefs = new ArrayList<>();
         this.tables = new ArrayList<>();
         this.menu = new ArrayList<>();
+        this.menuPool = new ArrayList<>();
         this.waiterPool = new ArrayList<>();
         this.chefPool = new ArrayList<>();
         this.waitingCustomers = new LinkedList<>();
         this.orderQueue = new LinkedList<>();
         this.activeOrders = new ArrayList<>();
+        this.passCounter = new LinkedList<>();
         this.allCustomers = new ArrayList<>();
         this.recentReviews = new ArrayList<>();
         this.gameLogs = new ArrayList<>();
+        this.decorations = new ArrayList<>();
         this.random = new Random();
         if (initDefault) {
             initializeDefault();
@@ -91,14 +105,40 @@ public class Hotel {
         this.maxTables = 5;
         this.hasSecondFloor = false;
         this.lastPoolRefresh = 0;
+        this.ambienceScore = 70;
+        this.cleanliness = 80;
         tables.add(new Table(1, 2));
         tables.add(new Table(2, 4));
-        menu.add(Dish.createEggFriedRice());
-        menu.add(Dish.createTomatoEgg());
+        setupMenuPool();
+        refreshMenuForLevel(hotelLevel);
         refreshEmployeePool();
         addLog("[开业] " + name + " 开业了！");
         addLog("[资金] 初始资金: $" + money);
         addLog("[提示] 先招聘员工才能开始营业！");
+    }
+
+    public void setupMenuPool() {
+        List<Dish> loadedMenu = MenuConfigLoader.loadMenuFromResource();
+        if (!loadedMenu.isEmpty()) {
+            loadedMenu.forEach(this::addDishToPool);
+        }
+        addDishToPool(Dish.createEggFriedRice());
+        addDishToPool(Dish.createTomatoEgg());
+        addDishToPool(Dish.createKungPaoChicken());
+        addDishToPool(Dish.createSweetSourPork());
+        addDishToPool(Dish.createMaPoTofu());
+        addDishToPool(Dish.createBraisedPork());
+        addDishToPool(Dish.createPekingDuck());
+        addDishToPool(Dish.createSteamedFish());
+        addDishToPool(Dish.createLobster());
+        addDishToPool(Dish.createWagyuSteak());
+    }
+
+    private void addDishToPool(Dish dish) {
+        boolean exists = menuPool.stream().anyMatch(d -> d.getName().equals(dish.getName()));
+        if (!exists) {
+            menuPool.add(dish);
+        }
     }
     public void refreshEmployeePool() {
         waiterPool.clear();
@@ -124,6 +164,41 @@ public class Hotel {
         lastPoolRefresh = gameTime;
         addLog("[招聘] 候选员工已刷新！");
     }
+
+    private void refreshMenuForLevel(int level) {
+        List<String> newlyUnlocked = new ArrayList<>();
+        for (Dish dish : menuPool) {
+            boolean unlocked = dish.getLevel() <= level;
+            boolean already = menu.stream().anyMatch(d -> d.getName().equals(dish.getName()));
+            if (unlocked && !already) {
+                if (menu.size() < MAX_ACTIVE_DISH) {
+                    menu.add(dish);
+                }
+                newlyUnlocked.add(dish.getName());
+            }
+        }
+        if (!newlyUnlocked.isEmpty()) {
+            addLog("[菜谱] 解锁菜品: " + String.join("、", newlyUnlocked));
+        }
+    }
+
+    public boolean selectDishForMenu(String dishName) {
+        if (dishName == null) return false;
+        if (menu.size() >= MAX_ACTIVE_DISH) return false;
+        Optional<Dish> target = menuPool.stream()
+            .filter(d -> d.getName().equals(dishName) && d.getLevel() <= hotelLevel)
+            .findFirst();
+        if (target.isPresent() && menu.stream().noneMatch(d -> d.getName().equals(dishName))) {
+            menu.add(target.get());
+            return true;
+        }
+        return false;
+    }
+
+    public boolean removeDishFromMenu(String dishName) {
+        if (dishName == null) return false;
+        return menu.removeIf(d -> d.getName().equals(dishName));
+    }
     public void tick() {
         gameTime++;
         if (gameTime - lastPoolRefresh >= 300) {
@@ -137,6 +212,7 @@ public class Hotel {
         }
 
         updateEvent();
+        updateEnvironment();
         trySpawnCustomer();
         updateCustomers();
         updateEmployees();
@@ -176,7 +252,12 @@ public class Hotel {
         for (Customer customer : allCustomers) {
             Customer.CustomerState prevState = customer.getState();
             customer.tick();
-            if (prevState != Customer.CustomerState.LEFT_ANGRY && 
+            if (customer.shouldComplain()) {
+                customer.markComplained();
+                addLog("[催单] " + customer.getName() + " 已经等不及，要求加快出菜！");
+                reputation = Math.max(0, reputation - 1);
+            }
+            if (prevState != Customer.CustomerState.LEFT_ANGRY &&
                 customer.getState() == Customer.CustomerState.LEFT_ANGRY) {
                 handleAngryCustomer(customer);
             }
@@ -192,11 +273,13 @@ public class Hotel {
         money = Math.max(0, money - penalty);
         reputation = Math.max(0, reputation + customer.getReputationEffect());
         totalCustomersLost++;
-        double rating = customer.getRating();
+        double rating = applyEnvironmentImpact(customer.getRating());
         addRating(rating, customer.getReview());
         if (customer.getTable() != null) {
             customer.getTable().clearTable();
+            cleanliness = Math.max(30, cleanliness - 2);
         }
+        cancelOrdersForCustomer(customer);
         addLog("[差评] " + customer.getName() + " 生气离开！评分:" + rating + "星");
     }
 
@@ -211,7 +294,7 @@ public class Hotel {
         hotelExp += expGain;
         reputation = Math.min(100, reputation + customer.getReputationEffect());
         totalCustomersServed++;
-        double rating = customer.getRating();
+        double rating = applyEnvironmentImpact(customer.getRating());
         addRating(rating, customer.getReview());
         if (!waiters.isEmpty()) {
             Waiter w = waiters.get(random.nextInt(waiters.size()));
@@ -219,6 +302,7 @@ public class Hotel {
         }
         if (customer.getTable() != null) {
             customer.getTable().clearTable();
+            cleanliness = Math.max(30, cleanliness - 1);
         }
         customer.setState(Customer.CustomerState.LEFT_HAPPY);
         String tipInfo = tip > 0 ? "(+小费" + tip + ")" : "";
@@ -236,6 +320,61 @@ public class Hotel {
         while (recentReviews.size() > 30) {
             recentReviews.remove(recentReviews.size() - 1);
         }
+    }
+
+    private double applyEnvironmentImpact(double rating) {
+        double ambienceFactor = 0.9 + ambienceScore / 250.0;
+        double cleanFactor = 0.9 + cleanliness / 300.0;
+        double finalRating = rating * ambienceFactor * cleanFactor;
+        return Math.max(1.0, Math.min(5.5, Math.round(finalRating * 2) / 2.0));
+    }
+
+    private boolean isCustomerActive(Customer customer) {
+        if (customer == null) return false;
+        Customer.CustomerState state = customer.getState();
+        return state != Customer.CustomerState.LEFT_ANGRY &&
+               state != Customer.CustomerState.LEFT_HAPPY;
+    }
+
+    private void cancelOrdersForCustomer(Customer customer) {
+        if (customer == null) return;
+        List<Order> cancelled = new ArrayList<>();
+        Iterator<Order> iterator = activeOrders.iterator();
+        while (iterator.hasNext()) {
+            Order order = iterator.next();
+            if (order.getCustomer() == customer) {
+                iterator.remove();
+                cancelled.add(order);
+            }
+        }
+        orderQueue.removeIf(o -> o.getCustomer() == customer);
+        for (Order order : cancelled) {
+            cancelOrder(order, "顾客离店，订单作废");
+        }
+    }
+
+    private void cancelOrder(Order order, String reason) {
+        if (order == null) return;
+        for (Chef chef : chefs) {
+            if (order.equals(chef.getCurrentOrder())) {
+                chef.cancelCooking();
+            }
+        }
+        for (Waiter waiter : waiters) {
+            if (order.equals(waiter.getCarryingOrder())) {
+                waiter.finishTask();
+                waiter.moveToHome();
+            }
+        }
+        activeOrders.remove(order);
+        orderQueue.remove(order);
+        purgePassForOrder(order);
+        String name = order.getCustomer() != null ? order.getCustomer().getName() : "顾客";
+        addLog("[取消] 订单#" + order.getId() + " (" + name + ") " + reason);
+    }
+
+    private void purgePassForOrder(Order order) {
+        passCounter.removeIf(prepared -> prepared.getOrder().equals(order));
     }
     
     public double getAverageRating() {
@@ -308,20 +447,29 @@ public class Hotel {
 
 
     private void assignWaiterTask(Waiter waiter) {
-        for (Order order : activeOrders) {
-            if (order.hasCompletedDishes()) {
-                Dish dish = order.getCompletedDishForDelivery();
-                Customer customer = order.getCustomer();
-                waiter.setServingCustomer(customer);
-                waiter.startDelivering(order, dish);
-                int targetTableId = -1;
-                if (customer != null && customer.getTable() != null) {
-                    targetTableId = customer.getTable().getId();
-                }
-                waiter.setTargetTableId(targetTableId);
-                waiter.setCurrentTask(Waiter.WaiterTask.WALKING_TO_KITCHEN);
-                addLog("[取菜] " + waiter.getName() + " 去厨房取 " + dish.getName());
-                return;
+        PreparedDish prepared = claimPreparedDish();
+        if (prepared != null) {
+            Order order = prepared.getOrder();
+            Customer customer = order.getCustomer();
+            waiter.setServingCustomer(customer);
+            waiter.startDelivering(order, prepared.getDish(), prepared.getQuality(), prepared.getServings());
+            int targetTableId = -1;
+            if (customer != null && customer.getTable() != null) {
+                targetTableId = customer.getTable().getId();
+            }
+            waiter.setTargetTableId(targetTableId);
+            waiter.setCurrentTask(Waiter.WaiterTask.WALKING_TO_KITCHEN);
+            addLog("[取菜] " + waiter.getName() + " 去传菜口取 " + prepared.getDish().getName());
+            return;
+        }
+
+        Iterator<Order> iterator = activeOrders.iterator();
+        while (iterator.hasNext()) {
+            Order order = iterator.next();
+            if (!isCustomerActive(order.getCustomer())) {
+                iterator.remove();
+                cancelOrder(order, "顾客离店，订单作废");
+                continue;
             }
         }
         if (!waitingCustomers.isEmpty()) {
@@ -364,12 +512,11 @@ public class Hotel {
 
     private void finishTakingOrder(Waiter waiter) {
         Customer customer = waiter.getServingCustomer();
-        
+
         if (customer != null && customer.getState() == Customer.CustomerState.WAITING_ORDER) {
             customer.orderDishes(menu);
             Order order = new Order(customer, gameTime);
-            orderQueue.add(order);
-            activeOrders.add(order);
+            submitOrder(order);
             waiter.gainExp(5);
             
             StringBuilder orderStr = new StringBuilder();
@@ -387,22 +534,36 @@ public class Hotel {
     private void finishDelivering(Waiter waiter) {
         Order order = waiter.getCarryingOrder();
         Dish deliveredDish = waiter.getCarryingDish();
-        
+        double quality = waiter.getCarryingQuality();
+        int servings = waiter.getCarryingServings();
+
         if (order != null && order.getCustomer() != null) {
-            if (hotelLevel >= 10 && waiter.checkError()) {
+            if (!isCustomerActive(order.getCustomer())) {
+                cancelOrder(order, "顾客离店，未能送达");
+            } else if (hotelLevel >= 10 && waiter.checkError()) {
                 addLog("[事故] " + waiter.getName() + " 摔碎盘子！");
                 money = Math.max(0, money - 15);
                 if (deliveredDish != null) {
-                    order.confirmDishDelivered(deliveredDish);
+                    order.confirmDishDelivered(deliveredDish, servings);
                 }
             } else if (deliveredDish != null) {
                 Customer customer = order.getCustomer();
-                customer.receiveDish(deliveredDish);
-                order.confirmDishDelivered(deliveredDish);
+                if (customer.getPatience() < customer.getMaxPatience() / 3) {
+                    addLog("[催单] " + customer.getName() + " 等太久了，情绪低落");
+                    quality *= 0.9;
+                }
+                for (int i = 0; i < servings; i++) {
+                    customer.receiveDish(deliveredDish, quality);
+                    int shopExpGain = (int) Math.max(1, deliveredDish.getShopExpReward() * quality);
+                    hotelExp += shopExpGain;
+                    deliveredDish.gainDishExp(deliveredDish.getDishExpGain());
+                }
+                order.confirmDishDelivered(deliveredDish, servings);
                 waiter.gainExp(8);
-                addLog("[送达] " + customer.getName() + " 收到 " + deliveredDish.getName());
+                String suffix = servings > 1 ? (" x" + servings) : "";
+                addLog("[送达] " + customer.getName() + " 收到 " + deliveredDish.getName() + suffix + " 品质x" + String.format("%.2f", quality));
             }
-            
+
             if (order.isFullyDelivered()) {
                 order.markDelivered();
                 activeOrders.remove(order);
@@ -418,6 +579,12 @@ public class Hotel {
             if (chef.isResting()) continue;
 
             if (chef.isBusy()) {
+                Order current = chef.getCurrentOrder();
+                if (!isCustomerActive(current == null ? null : current.getCustomer())) {
+                    cancelOrder(current, "顾客离店，停止烹饪");
+                    chef.cancelCooking();
+                    continue;
+                }
                 chef.setCookTimer(chef.getCookTimer() - 1);
                 if (chef.getCookTimer() <= 0) {
                     finishCooking(chef);
@@ -429,33 +596,112 @@ public class Hotel {
     }
 
     private void assignChefTask(Chef chef) {
-        for (Order order : activeOrders) {
-            Dish dish = order.getNextDishToCook();
-            if (dish != null && chef.canCook(dish)) {
-                Dish toCook = order.startCookingDish();
-                chef.startCooking(order, toCook);
-                addLog("[烹饪] " + chef.getName() + " 开始做 " + toCook.getName());
-                return;
-            }
+        Order order = pollNextOrderForCooking();
+        if (order == null) {
+            return;
+        }
+
+        if (!isCustomerActive(order.getCustomer())) {
+            cancelOrder(order, "顾客离店，订单作废");
+            return;
+        }
+
+        Dish dish = order.getNextDishToCook();
+        if (dish != null && chef.canCook(dish)) {
+            Dish toCook = order.startCookingDish();
+            money = Math.max(0, money - toCook.getCost());
+            chef.startCooking(order, toCook);
+            addLog("[烹饪] " + chef.getName() + " 开始做 " + toCook.getName());
+        } else if (dish != null) {
+            // 厨师档次不够，稍后再试
+            requeueOrder(order);
         }
     }
 
     private void finishCooking(Chef chef) {
         Order order = chef.getCurrentOrder();
         Dish dish = chef.getCurrentDish();
-        
+
         if (order != null && dish != null) {
-            if (chef.checkBurnDish()) {
+            if (!isCustomerActive(order.getCustomer())) {
+                cancelOrder(order, "顾客离店，丢弃" + dish.getName());
+            } else if (chef.checkBurnDish(dish)) {
                 addLog("[事故] " + chef.getName() + " 把 " + dish.getName() + " 做焦了！");
                 order.getPendingDishes().add(0, dish);
                 chef.consumeStamina(5);
             } else {
-                order.completeDish(dish);
-                addLog("[完成] " + chef.getName() + " 完成 " + dish.getName());
+                double quality = chef.getQualityBonus(dish) + (random.nextDouble() - 0.5) * 0.1;
+                quality = Math.max(0.8, Math.min(1.3, quality));
+                int servings = Math.max(1, dish.getBaseServings());
+                order.completeDish(dish, servings);
+                for (int i = 0; i < servings; i++) {
+                    PreparedDish preparedDish = new PreparedDish(order, dish, quality, 1);
+                    passCounter.offer(preparedDish);
+                }
+                String suffix = servings > 1 ? (" x" + servings) : "";
+                addLog("[完成] " + chef.getName() + " 完成 " + dish.getName() + suffix + " (品质x" + String.format("%.2f", quality) + ")");
             }
         }
-        
+
         chef.finishCooking();
+
+        if (order != null && isCustomerActive(order.getCustomer())) {
+            if (!order.getPendingDishes().isEmpty()) {
+                requeueOrder(order);
+            }
+        }
+    }
+
+    private void submitOrder(Order order) {
+        if (order == null) return;
+        activeOrders.add(order);
+        orderQueue.add(order);
+        addLog("[传菜口] 订单#" + order.getId() + " 已送往后厨");
+    }
+
+    private Order pollNextOrderForCooking() {
+        while (!orderQueue.isEmpty()) {
+            Order order = orderQueue.poll();
+            if (order == null) continue;
+
+            if (!isCustomerActive(order.getCustomer())) {
+                cancelOrder(order, "顾客离店，订单作废");
+                continue;
+            }
+
+            if (!order.getPendingDishes().isEmpty()) {
+                return order;
+            }
+        }
+        return null;
+    }
+
+    private void requeueOrder(Order order) {
+        if (order == null) return;
+        if (!isCustomerActive(order.getCustomer())) return;
+        if (order.getPendingDishes().isEmpty()) return;
+        orderQueue.offer(order);
+    }
+
+    private PreparedDish claimPreparedDish() {
+        Iterator<PreparedDish> iterator = passCounter.iterator();
+        while (iterator.hasNext()) {
+            PreparedDish prepared = iterator.next();
+            Order order = prepared.getOrder();
+            if (!isCustomerActive(order.getCustomer())) {
+                iterator.remove();
+                cancelOrder(order, "顾客离店，作废已出菜");
+                continue;
+            }
+            if (!order.hasCompletedDishes()) {
+                iterator.remove();
+                continue;
+            }
+            order.getCompletedDishForDelivery(prepared.getServings());
+            iterator.remove();
+            return prepared;
+        }
+        return null;
     }
 
     private Table findEmptyTable() {
@@ -465,6 +711,55 @@ public class Hotel {
             }
         }
         return null;
+    }
+
+    public boolean moveTable(int tableId, int newX, int newY) {
+        if (newX < 0 || newY < 0 || newX > LAYOUT_WIDTH || newY > LAYOUT_HEIGHT) {
+            addLog("[布局] 坐标越界，无法移动桌子");
+            return false;
+        }
+        Table target = tables.stream().filter(t -> t.getId() == tableId).findFirst().orElse(null);
+        if (target == null) return false;
+
+        for (Table other : tables) {
+            if (other == target) continue;
+            double dx = other.getPosX() - newX;
+            double dy = other.getPosY() - newY;
+            double distance = Math.sqrt(dx * dx + dy * dy);
+            if (distance < TABLE_MIN_DISTANCE) {
+                addLog("[布局] 与桌" + other.getId() + " 太近，需保持通道");
+                return false;
+            }
+        }
+        target.setPosition(newX, newY);
+        addLog("[布局] 已将桌" + tableId + " 移动到(" + newX + "," + newY + ")");
+        return true;
+    }
+
+    public boolean placeDecoration(Decoration decoration) {
+        if (decoration == null) return false;
+        if (money < decoration.getCost()) {
+            addLog("[装修] 资金不足，无法购买 " + decoration.getName());
+            return false;
+        }
+        decorations.add(decoration);
+        money -= decoration.getCost();
+        ambienceScore = Math.min(120, ambienceScore + decoration.getAmbienceBonus());
+        cleanliness = Math.min(120, cleanliness + decoration.getCleanlinessBonus());
+        addLog("[装修] 放置 " + decoration.getName() + " 环境+" + decoration.getAmbienceBonus() + " 卫生+" + decoration.getCleanlinessBonus());
+        return true;
+    }
+
+    public boolean removeDecoration(String name) {
+        Optional<Decoration> target = decorations.stream().filter(d -> d.getName().equals(name)).findFirst();
+        if (target.isPresent()) {
+            decorations.remove(target.get());
+            ambienceScore = Math.max(50, ambienceScore - target.get().getAmbienceBonus());
+            cleanliness = Math.max(30, cleanliness - target.get().getCleanlinessBonus());
+            addLog("[装修] 移除 " + name + "，环境/卫生有所下降");
+            return true;
+        }
+        return false;
     }
     private void checkLevelUp() {
         // 不再自动升级，只检查是否可以升级
@@ -529,48 +824,41 @@ public class Hotel {
 
     private void onHotelLevelUp() {
         addLog("[升级] 餐厅升级到 Lv." + hotelLevel + "！");
+        refreshMenuForLevel(hotelLevel);
         switch (hotelLevel) {
             case 2:
-                menu.add(Dish.createMaPoTofu());
                 addLog("[解锁] 新菜品：麻婆豆腐");
                 break;
             case 3:
-                menu.add(Dish.createKungPaoChicken());
                 maxTables = 8;
-                addLog("[解锁] 新菜品：宫保鸡丁 | 桌子上限+3");
+                addLog("[解锁] 宫保鸡丁 | 桌子上限+3");
                 break;
             case 5:
-                menu.add(Dish.createSweetSourPork());
                 addLog("[解锁] 新菜品：糖醋里脊");
                 break;
             case 10:
                 unlockedWaiterTier = 2;
                 unlockedChefTier = 2;
-                menu.add(Dish.createBraisedPork());
                 maxTables = 12;
-                addLog("[解锁] 普通员工！新菜品：红烧肉");
+                addLog("[解锁] 普通员工！红烧肉 | 桌子上限+2");
                 break;
             case 15:
-                menu.add(Dish.createSteamedFish());
                 addLog("[解锁] 新菜品：清蒸鱼");
                 break;
             case 20:
-                menu.add(Dish.createPekingDuck());
                 maxTables = 18;
                 hasSecondFloor = true;
-                addLog("[解锁] 二楼！新菜品：北京烤鸭");
+                addLog("[解锁] 二楼！北京烤鸭 | 桌子上限+6");
                 break;
             case 30:
                 unlockedWaiterTier = 3;
                 unlockedChefTier = 3;
-                menu.add(Dish.createLobster());
                 maxTables = 24;
-                addLog("[解锁] 中级员工！新菜品：龙虾");
+                addLog("[解锁] 中级员工！龙虾 | 桌子上限+6");
                 break;
             case 50:
                 unlockedWaiterTier = 4;
                 unlockedChefTier = 4;
-                menu.add(Dish.createWagyuSteak());
                 maxTables = 30;
                 addLog("[解锁] 高级员工！终极菜品：和牛牛排！");
                 break;
@@ -588,9 +876,21 @@ public class Hotel {
     }
 
     private void cleanupCustomers() {
-        allCustomers.removeIf(c -> 
-            c.getState() == Customer.CustomerState.LEFT_ANGRY || 
+        allCustomers.removeIf(c ->
+            c.getState() == Customer.CustomerState.LEFT_ANGRY ||
             c.getState() == Customer.CustomerState.LEFT_HAPPY);
+    }
+
+    private void updateEnvironment() {
+        if (gameTime % 90 == 0) {
+            cleanliness = Math.max(30, cleanliness - 1);
+        }
+        if (gameTime % 180 == 0) {
+            ambienceScore = Math.max(50, ambienceScore - 1);
+        }
+        if (cleanliness < 50 && gameTime % 120 == 0) {
+            addLog("[卫生] 环境有点脏，影响顾客心情");
+        }
     }
 
     private void updateEvent() {
@@ -868,6 +1168,16 @@ public class Hotel {
     public List<Chef> getChefs() { return chefs; }
     public List<Table> getTables() { return tables; }
     public List<Dish> getMenu() { return menu; }
+    public List<Dish> getMenuPool() { return menuPool; }
+    public List<Dish> getUnlockedMenuPool() {
+        List<Dish> unlocked = new ArrayList<>();
+        for (Dish d : menuPool) {
+            if (d.getLevel() <= hotelLevel) {
+                unlocked.add(d);
+            }
+        }
+        return unlocked;
+    }
     public Queue<Customer> getWaitingCustomers() { return waitingCustomers; }
     public List<Order> getActiveOrders() { return activeOrders; }
     public List<Customer> getAllCustomers() { return allCustomers; }
@@ -903,4 +1213,24 @@ public class Hotel {
     public boolean hasSecondFloor() { return hasSecondFloor; }
     public List<Waiter> getWaiterPool() { return waiterPool; }
     public List<Chef> getChefPool() { return chefPool; }
+    public boolean isDishActive(String name) { return menu.stream().anyMatch(d -> d.getName().equals(name)); }
+    public void applyDishProgress(String name, int dishLevel, int dishExp) {
+        for (Dish dish : menuPool) {
+            if (dish.getName().equals(name)) {
+                dish.setDishLevel(dishLevel);
+                dish.setDishExp(dishExp);
+                break;
+            }
+        }
+    }
+    public void setMenuByNames(List<String> names) {
+        menu.clear();
+        for (String name : names) {
+            if (menu.size() >= MAX_ACTIVE_DISH) break;
+            Optional<Dish> found = menuPool.stream()
+                .filter(d -> d.getName().equals(name) && d.getLevel() <= hotelLevel)
+                .findFirst();
+            found.ifPresent(menu::add);
+        }
+    }
 }

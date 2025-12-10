@@ -12,6 +12,8 @@ public class Waiter extends Employee {
     private Customer servingCustomer;
     private Order carryingOrder;
     private Dish carryingDish;    // 正在运送的菜品
+    private double carryingQuality; // 该菜品的品质加成
+    private int carryingServings; // 一次端的份数（托盘容量）
     private int taskTimer;
     private WaiterTask currentTask;
     
@@ -49,6 +51,8 @@ public class Waiter extends Employee {
         this.carryingOrder = null;
         this.taskTimer = 0;
         this.currentTask = WaiterTask.NONE;
+        this.carryingQuality = 1.0;
+        this.carryingServings = 1;
         
         // 初始化位置（默认值，会被UI更新）
         this.posX = 0;
@@ -123,9 +127,11 @@ public class Waiter extends Employee {
         consumeStamina(5);
     }
 
-    public void startDelivering(Order order, Dish dish) {
+    public void startDelivering(Order order, Dish dish, double quality, int servings) {
         this.carryingOrder = order;
         this.carryingDish = dish;
+        this.carryingQuality = quality;
+        this.carryingServings = Math.max(1, servings);
         this.currentTask = WaiterTask.DELIVERING;
         this.taskTimer = getDeliverTime();
         this.busy = true;
@@ -139,6 +145,8 @@ public class Waiter extends Employee {
         this.busy = false;
         this.carryingOrder = null;
         this.carryingDish = null;
+        this.carryingQuality = 1.0;
+        this.carryingServings = 1;
     }
 
     public int getGreetingTime() {
@@ -196,6 +204,8 @@ public class Waiter extends Employee {
     public Customer getServingCustomer() { return servingCustomer; }
     public void setServingCustomer(Customer customer) { this.servingCustomer = customer; }
     public Order getCarryingOrder() { return carryingOrder; }
+    public double getCarryingQuality() { return carryingQuality; }
+    public int getCarryingServings() { return carryingServings; }
     public int getTaskTimer() { return taskTimer; }
     public void setTaskTimer(int taskTimer) { this.taskTimer = taskTimer; }
     public WaiterTask getCurrentTask() { return currentTask; }

@@ -102,8 +102,18 @@ public class Chef extends Employee {
     public void finishCooking() {
         if (currentDish != null) {
             totalDishesCooked++;
-            gainExp(currentDish.getExpReward());
+            gainExp(currentDish.getChefExpReward());
         }
+        this.currentOrder = null;
+        this.currentDish = null;
+        this.cookTimer = 0;
+        this.busy = false;
+    }
+
+    /**
+     * 取消当前烹饪任务（顾客离开等异常情况）
+     */
+    public void cancelCooking() {
         this.currentOrder = null;
         this.currentDish = null;
         this.cookTimer = 0;
@@ -114,21 +124,27 @@ public class Chef extends Employee {
      * 检查是否把菜做焦了（厨艺影响）
      * 前期基本不会发生
      */
-    public boolean checkBurnDish() {
+    public boolean checkBurnDish(Dish dish) {
         // 等级低于30基本不会做焦
         if (level < 30) {
             return false;  // 前期不会做焦
         }
-        // 30级以上有极小概率
-        double burnRate = 0.02 - (cookingSkill * 0.0005);
+        // 考虑菜品要求与厨艺差距
+        int gap = dish == null ? 0 : Math.max(0, dish.getRequiredCookingSkill() - cookingSkill);
+        double burnRate = 0.02 + gap * 0.002 - (cookingSkill * 0.0003);
         return Math.random() < Math.max(0.005, burnRate);
     }
 
     /**
      * 检查菜品质量加成（厨艺和魅力影响）
      */
-    public double getQualityBonus() {
-        return 1.0 + (cookingSkill + charmSkill) * 0.005;
+    public double getQualityBonus(Dish dish) {
+        double base = 1.0 + (cookingSkill + charmSkill) * 0.005;
+        if (dish != null && cookingSkill < dish.getRequiredCookingSkill()) {
+            int gap = dish.getRequiredCookingSkill() - cookingSkill;
+            base *= Math.max(0.6, 1.0 - gap * 0.01);
+        }
+        return base;
     }
 
     public boolean canCook(Dish dish) {

@@ -683,38 +683,100 @@ public class ControlPanel extends JPanel {
         mainPanel.add(titleLabel);
         mainPanel.add(Box.createVerticalStrut(10));
         
-        // 菜品列表
-        for (Dish d : hotel.getMenu()) {
-            JPanel dishPanel = new JPanel(new BorderLayout());
-            dishPanel.setBackground(new Color(60, 60, 70));
-            dishPanel.setBorder(BorderFactory.createEmptyBorder(8, 10, 8, 10));
-            dishPanel.setMaximumSize(new Dimension(450, 50));
-            
-            JLabel dishLabel = new JLabel(String.format(
-                "<html><font color='white'>%s</font> " +
-                "<font color='#4FC3F7'>$%d</font> " +
-                "<font color='gray'>| 时间:%ds | Lv.%d</font></html>",
-                d.getName(), d.getPrice(), d.getCookTime(), d.getLevel()));
-            dishPanel.add(dishLabel, BorderLayout.CENTER);
-            
-            mainPanel.add(dishPanel);
-            mainPanel.add(Box.createVerticalStrut(5));
+        JPanel listPanel = new JPanel(new GridLayout(1, 2, 10, 0));
+        DefaultListModel<Dish> activeModel = new DefaultListModel<>();
+        hotel.getMenu().forEach(activeModel::addElement);
+        JList<Dish> activeList = new JList<>(activeModel);
+        activeList.setCellRenderer((list, value, index, isSelected, cellHasFocus) -> {
+            JLabel label = new JLabel(String.format("%s | 售价$%d | 店铺经验+%d | 厨师经验+%d | 菜Lv.%d",
+                value.getName(), value.getSalePrice(), value.getShopExpReward(), value.getChefExpReward(), value.getDishLevel()));
+            label.setOpaque(true);
+            label.setBackground(isSelected ? new Color(70, 130, 180) : new Color(60, 60, 70));
+            label.setForeground(Color.WHITE);
+            return label;
+        });
+
+        DefaultListModel<Dish> poolModel = new DefaultListModel<>();
+        for (Dish d : hotel.getUnlockedMenuPool()) {
+            if (!hotel.isDishActive(d.getName())) {
+                poolModel.addElement(d);
+            }
         }
-        
+        JList<Dish> poolList = new JList<>(poolModel);
+        poolList.setCellRenderer((list, value, index, isSelected, cellHasFocus) -> {
+            JLabel label = new JLabel(String.format("%s | 售价$%d | 店铺经验+%d | 厨师经验+%d | 需要厨Lv.%d",
+                value.getName(), value.getSalePrice(), value.getShopExpReward(), value.getChefExpReward(), value.getLevel()));
+            label.setOpaque(true);
+            label.setBackground(isSelected ? new Color(70, 80, 100) : new Color(60, 60, 70));
+            label.setForeground(Color.WHITE);
+            return label;
+        });
+
+        listPanel.add(new JScrollPane(activeList));
+        listPanel.add(new JScrollPane(poolList));
+        mainPanel.add(listPanel);
+
+        mainPanel.add(Box.createVerticalStrut(10));
+
+        JPanel btnPanel = new JPanel();
+        btnPanel.setOpaque(false);
+        JButton addBtn = new JButton("上架 →");
+        JButton removeBtn = new JButton("← 下架");
+        JLabel limitLabel = new JLabel("(最多上架4道菜)");
+        limitLabel.setForeground(Color.LIGHT_GRAY);
+        btnPanel.add(removeBtn);
+        btnPanel.add(addBtn);
+        btnPanel.add(limitLabel);
+        mainPanel.add(btnPanel);
+
+        addBtn.addActionListener(e -> {
+            Dish selected = poolList.getSelectedValue();
+            if (selected == null) return;
+            if (activeModel.size() >= 4) {
+                JOptionPane.showMessageDialog(dialog, "菜单最多只能上架4道菜！");
+                return;
+            }
+            activeModel.addElement(selected);
+            poolModel.removeElement(selected);
+        });
+
+        removeBtn.addActionListener(e -> {
+            Dish selected = activeList.getSelectedValue();
+            if (selected == null) return;
+            activeModel.removeElement(selected);
+            if (!poolModel.contains(selected)) {
+                poolModel.addElement(selected);
+            }
+        });
+
         mainPanel.add(Box.createVerticalStrut(15));
-        
+
         // 提示
         JLabel tipLabel = new JLabel("<html><font color='gray'>提示：升级餐厅可解锁更多菜品</font></html>");
         tipLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
         mainPanel.add(tipLabel);
-        
-        // 关闭按钮
+
+        // 按钮区域
+        JPanel actionPanel = new JPanel();
+        actionPanel.setOpaque(false);
+        JButton saveBtn = new JButton("保存菜单");
         JButton closeBtn = new JButton("关闭");
-        closeBtn.setAlignmentX(Component.CENTER_ALIGNMENT);
+        actionPanel.add(saveBtn);
+        actionPanel.add(closeBtn);
+        mainPanel.add(Box.createVerticalStrut(10));
+        mainPanel.add(actionPanel);
+
+        saveBtn.addActionListener(e -> {
+            List<String> selectedNames = new ArrayList<>();
+            for (int i = 0; i < activeModel.size(); i++) {
+                selectedNames.add(activeModel.get(i).getName());
+            }
+            hotel.setMenuByNames(selectedNames);
+            JOptionPane.showMessageDialog(dialog, "菜单已更新！");
+        });
+
         closeBtn.addActionListener(e -> dialog.dispose());
-        mainPanel.add(Box.createVerticalStrut(15));
-        mainPanel.add(closeBtn);
-        
+
         dialog.add(new JScrollPane(mainPanel));
         dialog.setVisible(true);
     }
