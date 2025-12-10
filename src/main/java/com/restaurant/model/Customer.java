@@ -63,6 +63,7 @@ public class Customer {
     private int dishesReceived;
     private int eatingTimer;
     private int baseExp;  // 基础经验值
+    private boolean complained;
 
     public enum CustomerState {
         WAITING_SEAT, WAITING_ORDER, WAITING_FOOD, EATING, FINISHED, LEFT_ANGRY, LEFT_HAPPY
@@ -93,6 +94,7 @@ public class Customer {
         this.dishesReceived = 0;
         this.eatingTimer = 0;
         this.baseExp = (int)(type.expMultiplier);
+        this.complained = false;
     }
 
     /**
@@ -166,14 +168,26 @@ public class Customer {
         this.state = CustomerState.WAITING_FOOD;
     }
 
-    public void receiveDish(Dish dish) {
-        totalSatisfaction += dish.getSatisfaction();
+    public void receiveDish(Dish dish) { receiveDish(dish, 1.0); }
+
+    public void receiveDish(Dish dish, double quality) {
+        double patienceFactor = 0.7 + ((double) patience / maxPatience) * 0.3;
+        int satisfactionGain = (int) (dish.getSatisfaction() * quality * patienceFactor);
+        totalSatisfaction += Math.max(5, satisfactionGain);
         dishesReceived++;
-        
+
         if (dishesReceived >= orders.size()) {
             state = CustomerState.EATING;
             eatingTimer = 5 + orders.size() * 2;
         }
+    }
+
+    public boolean shouldComplain() {
+        return !complained && state == CustomerState.WAITING_FOOD && patience < maxPatience / 3;
+    }
+
+    public void markComplained() {
+        complained = true;
     }
 
     public int calculateBill() {

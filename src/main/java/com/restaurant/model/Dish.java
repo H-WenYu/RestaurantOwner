@@ -11,8 +11,13 @@ public class Dish {
     private int satisfaction;   // 满意度加成 (0-100)
     private int level;          // 菜品等级（需要对应等级厨师）
     private int staminaCost;    // 制作消耗的体力
+    private int baseServings;   // 基础份数（用于批量出餐或大份菜）
 
     public Dish(String name, int price, int cookTime, int expReward, int satisfaction, int level, int staminaCost) {
+        this(name, price, cookTime, expReward, satisfaction, level, staminaCost, 1);
+    }
+
+    public Dish(String name, int price, int cookTime, int expReward, int satisfaction, int level, int staminaCost, int baseServings) {
         this.name = name;
         this.price = price;
         this.cookTime = cookTime;
@@ -20,6 +25,7 @@ public class Dish {
         this.satisfaction = satisfaction;
         this.level = level;
         this.staminaCost = staminaCost;
+        this.baseServings = Math.max(1, baseServings);
     }
 
     // 预设菜品工厂方法
@@ -71,11 +77,12 @@ public class Dish {
     public int getSatisfaction() { return satisfaction; }
     public int getLevel() { return level; }
     public int getStaminaCost() { return staminaCost; }
+    public int getBaseServings() { return baseServings; }
 
     @Override
     public String toString() {
-        return String.format("%s ($%d) [Lv.%d 制作%ds 满意度+%d]", 
-                name, price, level, cookTime, satisfaction);
+        return String.format("%s ($%d) [Lv.%d 制作%ds 满意度+%d 份数x%d]",
+                name, price, level, cookTime, satisfaction, baseServings);
     }
 }
 

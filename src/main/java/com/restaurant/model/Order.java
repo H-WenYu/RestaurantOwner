@@ -56,10 +56,21 @@ public class Order {
     }
 
     /**
-     * 完成一道菜
+     * 完成一道菜（支持一次出多份）
      */
-    public void completeDish(Dish dish) {
-        completedDishes.add(dish);
+    public void completeDish(Dish dish) { completeDish(dish, 1); }
+
+    public void completeDish(Dish dish, int servings) {
+        int actualServings = Math.max(1, servings);
+        for (int i = 0; i < actualServings; i++) {
+            completedDishes.add(dish);
+        }
+
+        // 一次做出多份时，补扣剩余的待做份数
+        for (int i = 1; i < actualServings; i++) {
+            pendingDishes.remove(dish);
+        }
+
         if (pendingDishes.isEmpty()) {
             state = OrderState.COMPLETED;
         } else {
@@ -70,18 +81,31 @@ public class Order {
     /**
      * 领取一道已完成的菜用于上菜（转移到已领取列表）
      */
-    public Dish claimDishForDelivery() {
-        if (completedDishes.isEmpty()) return null;
-        Dish dish = completedDishes.remove(0);
-        claimedDishes.add(dish);  // 标记为已领取
-        return dish;
+    public Dish claimDishForDelivery() { return claimDishForDelivery(1); }
+
+    public Dish claimDishForDelivery(int servings) {
+        Dish first = null;
+        int actualServings = Math.max(1, servings);
+        for (int i = 0; i < actualServings; i++) {
+            if (completedDishes.isEmpty()) break;
+            Dish dish = completedDishes.remove(0);
+            claimedDishes.add(dish);  // 标记为已领取
+            if (first == null) {
+                first = dish;
+            }
+        }
+        return first;
     }
     
     /**
      * 确认菜品已送达
      */
-    public void confirmDishDelivered(Dish dish) {
-        claimedDishes.remove(dish);
+    public void confirmDishDelivered(Dish dish) { confirmDishDelivered(dish, 1); }
+
+    public void confirmDishDelivered(Dish dish, int servings) {
+        for (int i = 0; i < servings; i++) {
+            claimedDishes.remove(dish);
+        }
     }
     
     /**
@@ -112,6 +136,10 @@ public class Order {
      */
     public Dish getCompletedDishForDelivery() {
         return claimDishForDelivery();
+    }
+
+    public Dish getCompletedDishForDelivery(int servings) {
+        return claimDishForDelivery(servings);
     }
 
     /**
